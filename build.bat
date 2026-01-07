@@ -7,7 +7,8 @@ echo GPanel Build Script
 echo ========================================
 echo.
 
-set VERSION=dev
+@REM set VERSION=dev
+set VERSION=release
 for /f "delims=" %%i in ('git rev-parse --short HEAD 2^>nul') do set GIT_COMMIT=%%i
 if "%GIT_COMMIT%"=="" set GIT_COMMIT=unknown
 
@@ -74,7 +75,7 @@ cd "%CORE_PATH%"
 set CGO_ENABLED=0
 set GOOS=windows
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\%CORE_NAME%-windows-amd64.exe" main.go frontend.go
+go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\windows-amd64\%CORE_NAME%.exe" main.go frontend.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Windows amd64 build failed
     pause
@@ -87,7 +88,7 @@ cd "%CORE_PATH%"
 set CGO_ENABLED=0
 set GOOS=linux
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\%CORE_NAME%-linux-amd64" main.go frontend.go
+go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\linux-amd64\%CORE_NAME%" main.go frontend.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Linux amd64 build failed
     pause
@@ -101,8 +102,8 @@ echo Build Completed!
 echo ========================================
 echo.
 echo Build artifacts in: %BUILD_PATH%\
-echo   - %CORE_NAME%-windows-amd64.exe  ^(Windows version^)
-echo   - %CORE_NAME%-linux-amd64       ^(Linux version^)
+echo   - %CORE_NAME%.exe  ^(Windows version^)
+echo   - %CORE_NAME%       ^(Linux version^)
 echo.
 echo Version info:
 echo   - Version: %VERSION%

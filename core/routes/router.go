@@ -16,6 +16,10 @@ func SetupRouter(r *gin.Engine) {
 			v1.POST("/auth/login", controllers.Login)
 			v1.GET("/system/info", middleware.Auth(), controllers.GetSystemInfo)
 			v1.GET("/system/current", middleware.Auth(), controllers.GetCurrentInfo)
+			v1.GET("/config", middleware.Auth(), controllers.GetConfig)
+			v1.POST("/config", middleware.Auth(), controllers.UpdateConfig)
+			v1.GET("/config/initialized", middleware.Auth(), controllers.CheckConfigInitialized)
+			v1.POST("/server/restart", middleware.Auth(), controllers.RestartServer)
 		}
 	}
 }

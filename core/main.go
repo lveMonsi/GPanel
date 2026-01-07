@@ -29,6 +29,9 @@ func main() {
 
 	r := gin.Default()
 
+	// 添加安全入口中间件
+	r.Use(middleware.SecurityEntrance())
+
 	// 添加安全中间件
 	r.Use(middleware.Security())
 
@@ -37,6 +40,7 @@ func main() {
 
 	addr := ":" + config.AppConfig.Server.Port
 	log.Printf("Starting GPanel server on %s", addr)
+	log.Printf("Security entrance: %s", config.AppConfig.SecurityEntrance)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

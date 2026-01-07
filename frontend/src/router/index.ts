@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import Layout from '@/components/Layout.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -15,8 +16,28 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: () => import('@/views/Dashboard.vue'),
-    meta: { requiresAuth: true }
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '/dashboard',
+        name: 'DashboardMain',
+        component: () => import('@/views/Dashboard.vue')
+      }
+    ]
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '/settings',
+        name: 'SettingsMain',
+        component: () => import('@/views/Settings.vue')
+      }
+    ]
   }
 ]
 

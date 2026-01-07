@@ -2,7 +2,7 @@
   <div class="dashboard">
     <header class="header">
       <div class="header-content">
-        <h1>GPanel 概览</h1>
+        <h1>系统概览</h1>
         <div class="system-info">
           <span class="info-item">🖥️ {{ systemInfo?.hostname || '加载中...' }}</span>
           <span class="info-item">⚙️ {{ systemInfo?.os || '' }} {{ systemInfo?.kernelArch || '' }}</span>
@@ -86,6 +86,26 @@
         <div v-else class="loading">加载中...</div>
       </div>
     </main>
+
+    <div v-if="showConfigAlert" class="modal-overlay" @click="closeAlert">
+      <div class="modal" @click.stop>
+        <div class="modal-header">
+          <h2>⚠️ 配置提醒</h2>
+        </div>
+        <div class="modal-body">
+          <p>检测到您的面板配置尚未完成初始化，请前往设置页面完善配置信息。</p>
+          <p class="hint">配置完成后，此提示将不再显示。</p>
+        </div>
+        <div class="modal-footer">
+          <router-link to="/settings" class="btn btn-primary" @click="closeAlert">
+            前往设置
+          </router-link>
+          <button class="btn btn-secondary" @click="closeAlert">
+            稍后设置
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -160,6 +180,7 @@ interface SystemInfo {
 
 const systemInfo = ref<SystemInfo | null>(null)
 const currentInfo = ref<CurrentInfo | null>(null)
+const showConfigAlert = ref(false)
 let refreshTimer: number | null = null
 
 const fetchSystemInfo = async () => {
@@ -179,6 +200,21 @@ const fetchCurrentInfo = async () => {
   } catch (error) {
     console.error('获取实时信息失败:', error)
   }
+}
+
+const checkConfigInitialized = async () => {
+  try {
+    const response = await axios.get('/api/v1/config/initialized')
+    if (!response.data.initialized) {
+      showConfigAlert.value = true
+    }
+  } catch (error) {
+    console.error('检查配置状态失败:', error)
+  }
+}
+
+const closeAlert = () => {
+  showConfigAlert.value = false
 }
 
 const formatBytes = (bytes: number): string => {
@@ -203,6 +239,7 @@ const formatBootTime = (timestamp: number): string => {
 onMounted(() => {
   fetchSystemInfo()
   refreshTimer = window.setInterval(fetchCurrentInfo, 3000)
+  checkConfigInitialized()
 })
 
 onUnmounted(() => {
@@ -214,61 +251,56 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard {
-  min-height: 100vh;
   background-color: #f5f5f5;
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: white;
   padding: 1.5rem 2rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
 .header h1 {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   margin: 0 0 1rem 0;
+  color: #333;
 }
 
 .system-info {
   display: flex;
-  gap: 2rem;
+  gap: 1.5rem;
   flex-wrap: wrap;
 }
 
 .info-item {
-  font-size: 0.9rem;
-  opacity: 0.9;
+  font-size: 0.85rem;
+  color: #666;
 }
 
 .content {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 1.5rem;
 }
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
 .info-card {
   background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
 .info-card h3 {
-  margin: 0 0 1rem 0;
-  font-size: 1.2rem;
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
   color: #333;
 }
 
@@ -389,5 +421,104 @@ onUnmounted(() => {
   text-align: center;
   color: #999;
   padding: 2rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #f57c00;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-body p {
+  margin: 0 0 1rem 0;
+  color: #333;
+  line-height: 1.6;
+}
+
+.modal-body .hint {
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.btn-secondary:hover {
+  background: #e0e0e0;
 }
 </style>
