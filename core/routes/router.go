@@ -13,6 +13,7 @@ func SetupRouter(r *gin.Engine) {
 		v1 := api.Group("/v1")
 		{
 			v1.GET("/health", controllers.HealthCheck)
+			v1.POST("/auth/login", controllers.Login)
 			v1.GET("/system/info", middleware.Auth(), controllers.GetSystemInfo)
 		}
 	}

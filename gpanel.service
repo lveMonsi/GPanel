@@ -1,0 +1,29 @@
+[Unit]
+Description=GPanel Server
+Documentation=https://github.com/yourusername/gpanel
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/gpanel
+ExecStart=/opt/gpanel/gpanel
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/gpanel
+ReadWritePaths=/var/log/gpanel
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

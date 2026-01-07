@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import axios from '@/utils/axios'
 
 interface SystemInfo {
   hostname: string
@@ -33,11 +33,7 @@ const systemInfo = ref<SystemInfo | null>(null)
 
 const fetchSystemInfo = async () => {
   try {
-    const response = await axios.get('/api/v1/system/info', {
-      headers: {
-        'Authorization': 'Bearer token'
-      }
-    })
+    const response = await axios.get('/api/v1/system/info')
     systemInfo.value = response.data
   } catch (error) {
     console.error('获取系统信息失败:', error)

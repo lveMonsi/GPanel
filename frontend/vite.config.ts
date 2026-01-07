@@ -17,5 +17,29 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    // 生产环境构建优化
+    target: 'es2015',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // 生产环境移除 console
+        drop_debugger: true
+      }
+    },
+    rollupOptions: {
+      output: {
+        // 代码分割
+        manualChunks: {
+          'vue-vendor': ['vue', 'vue-router', 'pinia'],
+          'http-vendor': ['axios']
+        }
+      }
+    },
+    // 资源内联限制
+    assetsInlineLimit: 4096,
+    // 源码映射（生产环境关闭）
+    sourcemap: false
   }
 })

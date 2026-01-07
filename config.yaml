@@ -1,0 +1,25 @@
+# GPanel 配置文件
+# 复制此文件为 config.yaml 并根据需要修改配置
+
+server:
+  # 服务器监听端口
+  port: "8080"
+  # 运行模式: debug, release, test
+  mode: "release"
+
+database:
+  # 数据库配置（预留）
+  host: "localhost"
+  port: 5432
+  user: "gpanel"
+  password: "change_me"
+  name: "gpanel"
+
+# 日志配置（预留）
+logging:
+  level: "info"
+  file: "/var/log/gpanel/gpanel.log"
+  max_size: 100
+  max_backups: 3
+  max_age: 28
+  compress: true
