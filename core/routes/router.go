@@ -15,6 +15,7 @@ func SetupRouter(r *gin.Engine) {
 			v1.GET("/health", controllers.HealthCheck)
 			v1.POST("/auth/login", controllers.Login)
 			v1.GET("/system/info", middleware.Auth(), controllers.GetSystemInfo)
+			v1.GET("/system/current", middleware.Auth(), controllers.GetCurrentInfo)
 		}
 	}
 }

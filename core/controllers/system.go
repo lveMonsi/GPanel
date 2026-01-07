@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"gpanel/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -14,9 +15,30 @@ func HealthCheck(c *gin.Context) {
 }
 
 func GetSystemInfo(c *gin.Context) {
+	systemInfo, err := utils.GetSystemInfo()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get system info",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, systemInfo)
+}
+
+func GetCurrentInfo(c *gin.Context) {
+	cpuInfo, memInfo, diskInfo, loadInfo, networkInfo, err := utils.GetCurrentInfo()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get current info",
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"hostname": "GPanel Server",
-		"os":       "Linux",
-		"version":  "1.0.0",
+		"cpuInfo":     cpuInfo,
+		"memoryInfo":  memInfo,
+		"diskInfo":    diskInfo,
+		"loadInfo":    loadInfo,
+		"networkInfo": networkInfo,
 	})
 }
