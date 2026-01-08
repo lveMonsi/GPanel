@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"gpanel/config"
+	"gpanel/global"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -19,8 +19,10 @@ func SecurityEntrance() gin.HandlerFunc {
 		}
 
 		// 获取配置的安全入口
-		securityEntrance := config.AppConfig.SecurityEntrance
-		if securityEntrance == "" {
+		var securityEntrance string
+		if global.ConfigCacheInstance != nil {
+			securityEntrance = global.ConfigCacheInstance.GetSecurityEntrance()
+		} else {
 			securityEntrance = "/"
 		}
 

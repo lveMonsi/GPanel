@@ -144,7 +144,18 @@ const config = reactive<Config>({
 const fetchConfig = async () => {
   try {
     const response = await axios.get('/api/v1/config')
-    Object.assign(config, response.data)
+    const data = response.data
+
+    // 将扁平的键值对转换为嵌套的配置对象
+    config.server.port = data.ServerPort || '8080'
+    config.server.mode = data.ServerMode || 'debug'
+    config.securityEntrance = data.SecurityEntrance || '/'
+    config.initialized = data.Initialized === 'true'
+    config.database.host = data.DatabaseHost || 'localhost'
+    config.database.port = parseInt(data.DatabasePort) || 3306
+    config.database.user = data.DatabaseUser || 'root'
+    config.database.password = data.DatabasePassword || ''
+    config.database.name = data.DatabaseName || 'gpanel'
   } catch (error) {
     console.error('获取配置失败:', error)
   }
@@ -153,7 +164,20 @@ const fetchConfig = async () => {
 const handleSave = async () => {
   loading.value = true
   try {
-    await axios.post('/api/v1/config', config)
+    // 将嵌套的配置对象转换为扁平的键值对
+    const flatConfig: Record<string, string> = {
+      ServerPort: config.server.port,
+      ServerMode: config.server.mode,
+      SecurityEntrance: config.securityEntrance,
+      Initialized: config.initialized ? 'true' : 'false',
+      DatabaseHost: config.database.host,
+      DatabasePort: String(config.database.port),
+      DatabaseUser: config.database.user,
+      DatabasePassword: config.database.password,
+      DatabaseName: config.database.name
+    }
+
+    await axios.post('/api/v1/config', flatConfig)
     alert('配置保存成功！\n\n系统将在2秒后自动重启以加载新配置...')
     await axios.post('/api/v1/server/restart')
   } catch (error) {

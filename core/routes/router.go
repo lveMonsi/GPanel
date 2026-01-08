@@ -20,6 +20,22 @@ func SetupRouter(r *gin.Engine) {
 			v1.POST("/config", middleware.Auth(), controllers.UpdateConfig)
 			v1.GET("/config/initialized", middleware.Auth(), controllers.CheckConfigInitialized)
 			v1.POST("/server/restart", middleware.Auth(), controllers.RestartServer)
+
+			// 系统设置 API
+			settingController := controllers.NewSettingController()
+			settings := v1.Group("/settings")
+			{
+				settings.GET("", middleware.Auth(), settingController.GetAllSettings)
+				settings.GET("/system", middleware.Auth(), settingController.GetSystemSettings)
+				settings.POST("/system", middleware.Auth(), settingController.UpdateSystemSettings)
+				settings.GET("/:key", middleware.Auth(), settingController.GetSettingByKey)
+				settings.POST("", middleware.Auth(), settingController.CreateSetting)
+				settings.PUT("", middleware.Auth(), settingController.UpdateSetting)
+				settings.DELETE("/:key", middleware.Auth(), settingController.DeleteSetting)
+			}
+
+			// 配置热重载 API
+			v1.POST("/config/reload", middleware.Auth(), controllers.ReloadConfig)
 		}
 	}
 }

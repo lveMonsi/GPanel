@@ -1,7 +1,8 @@
 package controllers
 
 import (
-	"gpanel/config"
+	"gpanel/global"
+	"gpanel/service"
 	"gpanel/utils"
 	"net/http"
 
@@ -45,36 +46,80 @@ func GetCurrentInfo(c *gin.Context) {
 }
 
 func GetConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, config.AppConfig)
+	if global.ConfigCacheInstance != nil {
+		config := global.ConfigCacheInstance.GetAll()
+		c.JSON(http.StatusOK, config)
+	} else {
+		settingService := service.NewSettingService()
+		settings, err := settingService.GetAllSettings()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to get config",
+			})
+			return
+		}
+
+		configMap := make(map[string]string)
+		for _, setting := range settings {
+			configMap[setting.Key] = setting.Value
+		}
+
+		c.JSON(http.StatusOK, configMap)
+	}
 }
 
 func UpdateConfig(c *gin.Context) {
-	var newConfig config.Config
-	if err := c.ShouldBindJSON(&newConfig); err != nil {
+	var updates map[string]string
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid config format",
 		})
 		return
 	}
 
-	config.AppConfig = &newConfig
-	config.AppConfig.Initialized = true
+	settingService := service.NewSettingService()
+	for key, value := range updates {
+		if err := settingService.UpdateSetting(key, value); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to update config: " + key,
+			})
+			return
+		}
 
-	if err := config.SaveConfig(); err != nil {
+		// 更新缓存
+		if global.ConfigCacheInstance != nil {
+			global.ConfigCacheInstance.Set(key, value)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Config updated successfully",
+	})
+}
+
+func CheckConfigInitialized(c *gin.Context) {
+	if global.ConfigCacheInstance != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"initialized": global.ConfigCacheInstance.IsInitialized(),
+		})
+	} else {
+		settingService := service.NewSettingService()
+		initialized, _ := settingService.GetSettingValueByKey("Initialized")
+		c.JSON(http.StatusOK, gin.H{
+			"initialized": initialized == "true",
+		})
+	}
+}
+
+func ReloadConfig(c *gin.Context) {
+	if err := global.ReloadConfig(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to save config",
+			"error": "Failed to reload config",
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Config updated successfully",
-		"config":  config.AppConfig,
-	})
-}
-
-func CheckConfigInitialized(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"initialized": config.AppConfig.Initialized,
+		"message": "Config reloaded successfully",
 	})
 }
