@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"path"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -23,23 +22,24 @@ func SetupFrontend(r *gin.Engine) {
 
 	fileServer := http.FileServer(http.FS(frontendDist))
 
-	r.GET("/", func(c *gin.Context) {
-		c.Request.URL.Path = "/"
-		fileServer.ServeHTTP(c.Writer, c.Request)
-	})
-
+	// 处理静态资源
 	r.GET("/assets/*filepath", func(c *gin.Context) {
 		filepath := c.Param("filepath")
-		c.Request.URL.Path = path.Join("/assets", filepath)
+		c.Request.URL.Path = "/assets/" + filepath
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 
+	// 使用 NoRoute 处理所有其他路由（包括前端路由）
 	r.NoRoute(func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/api") {
+		path := c.Request.URL.Path
+
+		// 如果是 API 请求，返回 404
+		if strings.HasPrefix(path, "/api") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "API not found"})
 			return
 		}
 
+		// 对于其他所有请求，返回 index.html 以支持前端路由
 		c.Request.URL.Path = "/"
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})

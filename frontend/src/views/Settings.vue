@@ -5,6 +5,11 @@
     </header>
 
     <main class="content">
+      <Modal
+        v-model:visible="modalVisible"
+        :title="modalTitle"
+        :message="modalMessage"
+      />
       <div class="settings-card">
         <h2>服务器配置</h2>
         <form @submit.prevent="handleSave">
@@ -106,6 +111,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/utils/axios'
+import Modal from '@/components/Modal.vue'
 
 interface Config {
   server: {
@@ -125,6 +131,9 @@ interface Config {
 
 const router = useRouter()
 const loading = ref(false)
+const modalVisible = ref(false)
+const modalMessage = ref('')
+const modalTitle = ref('提示')
 const config = reactive<Config>({
   server: {
     port: '8080',
@@ -161,6 +170,12 @@ const fetchConfig = async () => {
   }
 }
 
+const showModal = (title: string, message: string) => {
+  modalTitle.value = title
+  modalMessage.value = message
+  modalVisible.value = true
+}
+
 const handleSave = async () => {
   loading.value = true
   try {
@@ -178,11 +193,16 @@ const handleSave = async () => {
     }
 
     await axios.post('/api/v1/config', flatConfig)
-    alert('配置保存成功！\n\n系统将在2秒后自动重启以加载新配置...')
     await axios.post('/api/v1/server/restart')
+    showModal('保存成功', '配置保存成功！\n\n系统将在2秒后自动重启以加载新配置...')
+
+    // 2秒后自动刷新页面
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
   } catch (error) {
     console.error('保存配置失败:', error)
-    alert('保存配置失败，请重试')
+    showModal('保存失败', '保存配置失败，请重试')
   } finally {
     loading.value = false
   }

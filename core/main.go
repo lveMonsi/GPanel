@@ -63,8 +63,11 @@ func main() {
 	// 添加安全中间件
 	r.Use(middleware.Security())
 
-	SetupFrontend(r)
+	// 先注册 API 路由
 	routes.SetupRouter(r)
+
+	// 最后注册前端路由（通配符路由）
+	SetupFrontend(r)
 
 	// 从配置缓存获取端口配置
 	serverPort := global.ConfigCacheInstance.GetServerPort()
