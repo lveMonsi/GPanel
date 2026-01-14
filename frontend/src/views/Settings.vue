@@ -9,6 +9,8 @@
         v-model:visible="modalVisible"
         :title="modalTitle"
         :message="modalMessage"
+        :show-confirm="modalTitle === '即将重启面板'"
+        @confirm="handleSave"
       />
       <div class="settings-card">
         <h2>服务器配置</h2>
@@ -25,21 +27,33 @@
               />
             </div>
             <div class="form-group">
-              <label for="server-mode">运行模式</label>
-              <select id="server-mode" v-model="config.server.mode">
-                <option value="debug">Debug</option>
-                <option value="release">Release</option>
-              </select>
+              <label for="security-enabled">安全入口</label>
+              <div class="switch-wrapper">
+                <el-switch
+                  id="security-enabled"
+                  v-model="config.securityEnabled"
+                  active-color="var(--primary)"
+                  inactive-color="var(--border-color)"
+                  @change="handleSecurityChange"
+                />
+                <span class="switch-label">{{ config.securityEnabled ? '已开启' : '已关闭' }}</span>
+              </div>
+              <small class="hint">关闭安全入口后，任何人都可以访问面板，存在安全风险</small>
             </div>
             <div class="form-group">
               <label for="security-entrance">安全入口</label>
-              <input
-                id="security-entrance"
-                v-model="config.securityEntrance"
-                type="text"
-                placeholder="/"
-                @blur="ensureLeadingSlash"
-              />
+              <div class="input-with-button">
+                <input
+                  id="security-entrance"
+                  v-model="config.securityEntrance"
+                  type="text"
+                  placeholder="/"
+                  @blur="ensureLeadingSlash"
+                />
+                <button type="button" class="btn-generate" @click="generateRandomEntrance">
+                  <el-icon><Refresh /></el-icon>
+                </button>
+              </div>
               <small class="hint">访问面板的安全路径，例如：/abc123</small>
             </div>
           </div>
@@ -94,7 +108,7 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" :disabled="loading">
+            <button type="button" class="btn btn-primary" :disabled="loading" @click="configChanged ? showRestartConfirm() : handleSave()">
               {{ loading ? '保存中...' : '保存配置' }}
             </button>
             <button type="button" class="btn btn-secondary" @click="handleCancel">
@@ -108,10 +122,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/utils/axios'
 import Modal from '@/components/Modal.vue'
+import { Refresh } from '@element-plus/icons-vue'
 
 interface Config {
   server: {
@@ -126,6 +141,7 @@ interface Config {
     name: string
   }
   securityEntrance: string
+  securityEnabled: boolean
   initialized: boolean
 }
 
@@ -134,6 +150,8 @@ const loading = ref(false)
 const modalVisible = ref(false)
 const modalMessage = ref('')
 const modalTitle = ref('提示')
+const configChanged = ref(false)
+const originalConfig = ref<Config | null>(null)
 const config = reactive<Config>({
   server: {
     port: '8080',
@@ -147,6 +165,7 @@ const config = reactive<Config>({
     name: 'gpanel'
   },
   securityEntrance: '/',
+  securityEnabled: true,
   initialized: false
 })
 
@@ -159,12 +178,17 @@ const fetchConfig = async () => {
     config.server.port = data.ServerPort || '8080'
     config.server.mode = data.ServerMode || 'debug'
     config.securityEntrance = data.SecurityEntrance || '/'
+    config.securityEnabled = data.SecurityEnabled !== 'false'
     config.initialized = data.Initialized === 'true'
     config.database.host = data.DatabaseHost || 'localhost'
     config.database.port = parseInt(data.DatabasePort) || 3306
     config.database.user = data.DatabaseUser || 'root'
     config.database.password = data.DatabasePassword || ''
     config.database.name = data.DatabaseName || 'gpanel'
+
+    // 保存原始配置用于对比
+    originalConfig.value = JSON.parse(JSON.stringify(config))
+    configChanged.value = false
   } catch (error) {
     console.error('获取配置失败:', error)
   }
@@ -176,6 +200,44 @@ const showModal = (title: string, message: string) => {
   modalVisible.value = true
 }
 
+const handleCancel = () => {
+  router.push('/dashboard')
+}
+
+const ensureLeadingSlash = () => {
+  if (config.securityEntrance && !config.securityEntrance.startsWith('/')) {
+    config.securityEntrance = '/' + config.securityEntrance
+  }
+}
+
+const generateRandomEntrance = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let result = '/'
+  for (let i = 0; i < 12; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  config.securityEntrance = result
+  checkConfigChanged()
+}
+
+const handleSecurityChange = (value: boolean) => {
+  if (!value) {
+    showModal('安全提醒', '关闭安全入口后，任何人都可以访问面板，存在严重安全风险！\n\n建议仅在测试环境或内网环境中关闭。')
+  }
+  checkConfigChanged()
+}
+
+const checkConfigChanged = () => {
+  if (!originalConfig.value) return
+  configChanged.value = JSON.stringify(config) !== JSON.stringify(originalConfig.value)
+}
+
+const showRestartConfirm = () => {
+  modalTitle.value = '即将重启面板'
+  modalMessage.value = '配置修改后需要重启面板才能生效。\n\n请确保已妥善保存所有数据，避免造成数据损失。\n\n是否继续保存并重启？'
+  modalVisible.value = true
+}
+
 const handleSave = async () => {
   loading.value = true
   try {
@@ -184,6 +246,7 @@ const handleSave = async () => {
       ServerPort: config.server.port,
       ServerMode: config.server.mode,
       SecurityEntrance: config.securityEntrance,
+      SecurityEnabled: config.securityEnabled ? 'true' : 'false',
       Initialized: config.initialized ? 'true' : 'false',
       DatabaseHost: config.database.host,
       DatabasePort: String(config.database.port),
@@ -208,19 +271,14 @@ const handleSave = async () => {
   }
 }
 
-const handleCancel = () => {
-  router.push('/dashboard')
-}
-
-const ensureLeadingSlash = () => {
-  if (config.securityEntrance && !config.securityEntrance.startsWith('/')) {
-    config.securityEntrance = '/' + config.securityEntrance
-  }
-}
-
 onMounted(() => {
   fetchConfig()
 })
+
+// 监听配置变更
+watch(() => config, () => {
+  checkConfigChanged()
+}, { deep: true })
 </script>
 
 <style scoped>
@@ -228,102 +286,154 @@ onMounted(() => {
 }
 
 .header {
-  background: white;
-  padding: 1.5rem 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--card-bg);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.5rem;
-  color: #333;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.3px;
 }
 
 .content {
-  padding: 2rem;
-  max-width: 800px;
+  padding: 1rem;
+  max-width: 600px;
   margin: 0 auto;
 }
 
 .settings-card {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
 }
 
 .settings-card h2 {
-  margin: 0 0 1.5rem 0;
-  font-size: 1.5rem;
-  color: #333;
+  margin: 0 0 1.25rem 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .form-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-section h3 {
-  margin: 0 0 1rem 0;
-  font-size: 1.1rem;
-  color: #666;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #667eea;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--primary);
+  font-weight: 500;
 }
 
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
+  font-size: 0.8rem;
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  background: var(--bg-color);
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--primary);
+  background: var(--card-bg);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.form-group input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.form-group .hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.input-with-button {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.input-with-button input {
+  flex: 1;
+}
+
+.btn-generate {
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--primary-dark);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-generate:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.btn-generate:active {
+  transform: scale(0.95);
 }
 
 .form-actions {
   display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #eee;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(122, 201, 224, 0.3);
 }
 
 .btn-primary:disabled {
@@ -332,11 +442,25 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--bg-color);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .btn-secondary:hover {
-  background: #e0e0e0;
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.switch-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 </style>

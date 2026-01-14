@@ -4,9 +4,9 @@
       <div class="header-content">
         <h1>系统概览</h1>
         <div class="system-info">
-          <span class="info-item">🖥️ {{ systemInfo?.hostname || '加载中...' }}</span>
-          <span class="info-item">⚙️ {{ systemInfo?.os || '' }} {{ systemInfo?.kernelArch || '' }}</span>
-          <span class="info-item">📦 {{ systemInfo?.platformVersion || '' }}</span>
+          <span class="info-item"><el-icon><Monitor /></el-icon> {{ systemInfo?.hostname || '加载中...' }}</span>
+          <span class="info-item"><el-icon><Setting /></el-icon> {{ systemInfo?.os || '' }} {{ systemInfo?.kernelArch || '' }}</span>
+          <span class="info-item"><el-icon><Box /></el-icon> {{ systemInfo?.platformVersion || '' }}</span>
         </div>
       </div>
     </header>
@@ -22,7 +22,7 @@
 
       <div class="info-grid">
         <div class="info-card disk-card">
-          <h3>💽 磁盘信息</h3>
+          <h3><el-icon><Coin /></el-icon> 磁盘信息</h3>
           <div v-if="currentInfo && currentInfo.diskInfo.length > 0" class="disk-list">
             <div v-for="disk in currentInfo.diskInfo" :key="disk.mountpoint" class="disk-item">
               <div class="disk-header">
@@ -42,17 +42,17 @@
         </div>
 
         <div class="info-card network-card">
-          <h3>🌐 网络信息</h3>
+          <h3><el-icon><Connection /></el-icon> 网络信息</h3>
           <div v-if="currentInfo && currentInfo.networkInfo" class="network-stats">
             <div class="network-item">
-              <div class="network-icon">⬆️</div>
+              <el-icon class="network-icon"><Top /></el-icon>
               <div class="network-data">
                 <div class="network-label">发送</div>
                 <div class="network-value">{{ formatBytes(currentInfo.networkInfo.bytesSent) }}</div>
               </div>
             </div>
             <div class="network-item">
-              <div class="network-icon">⬇️</div>
+              <el-icon class="network-icon"><Bottom /></el-icon>
               <div class="network-data">
                 <div class="network-label">接收</div>
                 <div class="network-value">{{ formatBytes(currentInfo.networkInfo.bytesRecv) }}</div>
@@ -64,7 +64,7 @@
       </div>
 
       <div class="info-card processes-card">
-        <h3>📋 系统详情</h3>
+        <h3><el-icon><Document /></el-icon> 系统详情</h3>
         <div v-if="systemInfo" class="processes-details">
           <div class="detail-row">
             <span class="detail-label">进程数:</span>
@@ -86,26 +86,6 @@
         <div v-else class="loading">加载中...</div>
       </div>
     </main>
-
-    <div v-if="showConfigAlert" class="modal-overlay" @click="closeAlert">
-      <div class="modal" @click.stop>
-        <div class="modal-header">
-          <h2>⚠️ 配置提醒</h2>
-        </div>
-        <div class="modal-body">
-          <p>检测到您的面板配置尚未完成初始化，请前往设置页面完善配置信息。</p>
-          <p class="hint">配置完成后，此提示将不再显示。</p>
-        </div>
-        <div class="modal-footer">
-          <router-link to="/settings" class="btn btn-primary" @click="closeAlert">
-            前往设置
-          </router-link>
-          <button class="btn btn-secondary" @click="closeAlert">
-            稍后设置
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -113,6 +93,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from '@/utils/axios'
 import SystemStatus from '@/components/SystemStatus.vue'
+import { Monitor, Setting, Box, Coin, Connection, Top, Bottom, Document } from '@element-plus/icons-vue'
 
 interface CPUInfo {
   cores: number
@@ -180,7 +161,6 @@ interface SystemInfo {
 
 const systemInfo = ref<SystemInfo | null>(null)
 const currentInfo = ref<CurrentInfo | null>(null)
-const showConfigAlert = ref(false)
 let refreshTimer: number | null = null
 
 const fetchSystemInfo = async () => {
@@ -200,21 +180,6 @@ const fetchCurrentInfo = async () => {
   } catch (error) {
     console.error('获取实时信息失败:', error)
   }
-}
-
-const checkConfigInitialized = async () => {
-  try {
-    const response = await axios.get('/api/v1/config/initialized')
-    if (!response.data.initialized) {
-      showConfigAlert.value = true
-    }
-  } catch (error) {
-    console.error('检查配置状态失败:', error)
-  }
-}
-
-const closeAlert = () => {
-  showConfigAlert.value = false
 }
 
 const formatBytes = (bytes: number): string => {
@@ -239,7 +204,6 @@ const formatBootTime = (timestamp: number): string => {
 onMounted(() => {
   fetchSystemInfo()
   refreshTimer = window.setInterval(fetchCurrentInfo, 3000)
-  checkConfigInitialized()
 })
 
 onUnmounted(() => {
@@ -251,130 +215,153 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard {
-  background-color: #f5f5f5;
+  background-color: var(--bg-color);
 }
 
 .header {
-  background: white;
-  padding: 1.5rem 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--card-bg);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header-content {
 }
 
 .header h1 {
-  font-size: 1.5rem;
-  margin: 0 0 1rem 0;
-  color: #333;
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.3px;
 }
 
 .system-info {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
   flex-wrap: wrap;
 }
 
 .info-item {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.info-item .el-icon {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--primary-dark);
 }
 
 .content {
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .info-card {
-  background: white;
-  border-radius: 8px;
-  padding: 1rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 0.875rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
 }
 
 .info-card h3 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.1rem;
-  color: #333;
+  margin: 0 0 0.6rem 0;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.info-card h3 .el-icon {
+  color: var(--primary-dark);
 }
 
 .disk-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 .disk-item {
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
+  padding: 0.6rem;
+  background: var(--bg-color);
+  border-radius: var(--radius-sm);
 }
 
 .disk-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .disk-device {
-  font-weight: 600;
-  color: #333;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.8rem;
 }
 
 .disk-percent {
   font-weight: 600;
-  color: #667eea;
+  color: var(--primary-dark);
+  font-size: 0.8rem;
 }
 
 .disk-mount {
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
 }
 
 .disk-details {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
 }
 
 .progress-bar {
-  height: 6px;
-  background: #e0e0e0;
-  border-radius: 3px;
+  height: 3px;
+  background: var(--border-color);
+  border-radius: 1.5px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
   transition: width 0.3s ease;
 }
 
 .network-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .network-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  background: var(--bg-color);
+  border-radius: var(--radius-sm);
 }
 
 .network-icon {
-  font-size: 2rem;
+  font-size: 1.2rem;
+  color: var(--primary-dark);
 }
 
 .network-data {
@@ -382,143 +369,47 @@ onUnmounted(() => {
 }
 
 .network-label {
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.15rem;
 }
 
 .network-value {
-  font-size: 1.25rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #667eea;
+  color: var(--primary-dark);
 }
 
 .processes-details {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.4rem;
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  padding: 0.75rem;
-  background: #f8f9fa;
-  border-radius: 6px;
+  padding: 0.5rem;
+  background: var(--bg-color);
+  border-radius: var(--radius-sm);
 }
 
 .detail-label {
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
+  font-size: 0.8rem;
 }
 
 .detail-value {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 600;
+  font-size: 0.8rem;
 }
 
 .loading {
   text-align: center;
-  color: #999;
-  padding: 2rem;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal {
-  background: white;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  animation: slideIn 0.3s ease;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.modal-header {
+  color: var(--text-secondary);
   padding: 1.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  color: #f57c00;
-}
-
-.modal-body {
-  padding: 1.5rem;
-}
-
-.modal-body p {
-  margin: 0 0 1rem 0;
-  color: #333;
-  line-height: 1.6;
-}
-
-.modal-body .hint {
-  font-size: 0.9rem;
-  color: #666;
-  font-style: italic;
-}
-
-.modal-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #eee;
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #f5f5f5;
-  color: #666;
-}
-
-.btn-secondary:hover {
-  background: #e0e0e0;
+  font-size: 0.8rem;
 }
 </style>

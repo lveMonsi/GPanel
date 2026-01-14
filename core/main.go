@@ -8,15 +8,14 @@ import (
 	"gpanel/service"
 	"log"
 	"runtime"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	Version    = "dev"
-	BuildTime  = "unknown"
-	GitCommit  = "unknown"
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
 )
 
 func main() {
@@ -48,8 +47,8 @@ func main() {
 		log.Fatalf("Failed to initialize config cache: %v", err)
 	}
 
-	// 初始化配置热重载（每30秒检查一次）
-	global.InitConfigReloader(30 * time.Second)
+	// 初始化配置热重载器（禁用自动重载，仅支持手动触发）
+	global.InitConfigReloader(0)
 
 	// 从配置缓存获取服务器配置
 	serverMode := global.ConfigCacheInstance.GetServerMode()
@@ -74,6 +73,13 @@ func main() {
 
 	// 从配置缓存获取安全入口配置
 	securityEntrance := global.ConfigCacheInstance.GetSecurityEntrance()
+
+	// 输出安全入口到控制台
+	if securityEntrance != "/" {
+		log.Printf("========================================")
+		log.Printf("  Security Entrance: %s", securityEntrance)
+		log.Printf("========================================")
+	}
 
 	addr := ":" + serverPort
 	log.Printf("Starting GPanel server on %s", addr)

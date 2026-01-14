@@ -1,6 +1,9 @@
 package service
 
 import (
+	"crypto/rand"
+	"math/big"
+
 	"gpanel/models"
 	"gpanel/repo"
 )
@@ -57,16 +60,26 @@ func (s *SettingService) DeleteSetting(key string) error {
 }
 
 func (s *SettingService) InitializeDefaultSettings() error {
+	// 检查是否需要生成安全入口
+	securityEntrance := "/"
+	existingSetting, err := settingRepo.GetByKey("SecurityEntrance")
+	if err == nil && existingSetting.Value != "/" {
+		securityEntrance = existingSetting.Value
+	} else {
+		// 生成8位长度的小写字母和数字混合的安全入口
+		securityEntrance = generateRandomEntrance()
+	}
+
 	defaultSettings := map[string]struct {
 		Value string
 		About string
 	}{
-		"ServerPort":      {"8080", "服务器端口"},
-		"ServerMode":      {"debug", "服务器运行模式"},
-		"SecurityEntrance": {"/", "安全入口路径"},
-		"Initialized":     {"false", "系统是否已初始化"},
-		"Language":        {"zh-CN", "系统语言"},
-		"Timezone":        {"Asia/Shanghai", "时区设置"},
+		"ServerPort":       {"8080", "服务器端口"},
+		"ServerMode":       {"debug", "服务器运行模式"},
+		"SecurityEntrance": {securityEntrance, "安全入口路径"},
+		"Initialized":      {"true", "系统是否已初始化"},
+		"Language":         {"zh-CN", "系统语言"},
+		"Timezone":         {"Asia/Shanghai", "时区设置"},
 	}
 
 	for key, setting := range defaultSettings {
@@ -77,4 +90,17 @@ func (s *SettingService) InitializeDefaultSettings() error {
 	}
 
 	return nil
+}
+
+// generateRandomEntrance 生成8位长度的小写字母和数字混合的安全入口
+func generateRandomEntrance() string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	const length = 8
+
+	b := make([]byte, length)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
+	}
+	return "/" + string(b)
 }

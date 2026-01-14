@@ -3,7 +3,7 @@
     <div class="status-grid">
       <div class="status-card cpu-card">
         <div class="card-header">
-          <span class="icon">🖥️</span>
+          <el-icon class="icon"><Monitor /></el-icon>
           <span class="title">CPU</span>
         </div>
         <div class="card-content">
@@ -27,7 +27,7 @@
 
       <div class="status-card memory-card">
         <div class="card-header">
-          <span class="icon">💾</span>
+          <el-icon class="icon"><Cpu /></el-icon>
           <span class="title">内存</span>
         </div>
         <div class="card-content">
@@ -51,7 +51,7 @@
 
       <div class="status-card load-card">
         <div class="card-header">
-          <span class="icon">📊</span>
+          <el-icon class="icon"><TrendCharts /></el-icon>
           <span class="title">负载</span>
         </div>
         <div class="card-content">
@@ -74,7 +74,7 @@
 
       <div class="status-card uptime-card">
         <div class="card-header">
-          <span class="icon">⏱️</span>
+          <el-icon class="icon"><Timer /></el-icon>
           <span class="title">运行时间</span>
         </div>
         <div class="card-content">
@@ -87,6 +87,8 @@
 </template>
 
 <script setup lang="ts">
+import { Monitor, Cpu, TrendCharts, Timer } from '@element-plus/icons-vue'
+
 interface CPUInfo {
   cores: number
   logicalCores: number
@@ -144,100 +146,103 @@ const formatUptime = (seconds: number): string => {
 
 <style scoped>
 .system-status {
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
 }
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
 }
 
 .status-card {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s;
+  border: 1px solid var(--border-color);
 }
 
 .status-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .card-header .icon {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
+  color: var(--primary-dark);
 }
 
 .card-header .title {
-  font-size: 1.1rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .card-content {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .value {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #667eea;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--primary-dark);
   margin-bottom: 0.25rem;
+  letter-spacing: -0.5px;
 }
 
 .label {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
 }
 
 .details {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .detail-item {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 
 .detail-label {
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .detail-value {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .progress-bar {
-  height: 8px;
-  background: #f0f0f0;
-  border-radius: 4px;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
   transition: width 0.3s ease;
 }
 
 .load-values {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .load-item {
@@ -247,25 +252,25 @@ const formatUptime = (seconds: number): string => {
 }
 
 .load-label {
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 
 .load-value {
-  font-size: 1.2rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #667eea;
+  color: var(--primary-dark);
 }
 
 .uptime-value {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: #667eea;
+  color: var(--primary-dark);
   margin-bottom: 0.25rem;
 }
 
 .uptime-label {
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 </style>

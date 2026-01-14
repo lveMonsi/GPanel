@@ -2,19 +2,20 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="sidebar-header">
+        <div class="logo-icon">G</div>
         <h2>GPanel</h2>
       </div>
       <nav class="sidebar-nav">
         <router-link to="/dashboard" class="nav-item" active-class="active">
-          <span class="nav-icon">📊</span>
+          <el-icon class="nav-icon"><DataBoard /></el-icon>
           <span class="nav-text">概览</span>
         </router-link>
         <router-link to="/settings" class="nav-item" active-class="active">
-          <span class="nav-icon">⚙️</span>
+          <el-icon class="nav-icon"><Setting /></el-icon>
           <span class="nav-text">面板设置</span>
         </router-link>
         <a href="#" class="nav-item" @click.prevent="handleLogout">
-          <span class="nav-icon">🚪</span>
+          <el-icon class="nav-icon"><SwitchButton /></el-icon>
           <span class="nav-text">退出登录</span>
         </a>
       </nav>
@@ -27,6 +28,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { DataBoard, Setting, SwitchButton } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -43,65 +45,86 @@ const handleLogout = () => {
 }
 
 .sidebar {
-  width: 240px;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  width: 200px;
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-header {
-  padding: 2rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.5rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  flex-shrink: 0;
 }
 
 .sidebar-header h2 {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.3px;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 1.5rem 0;
+  padding: 1rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
   color: white;
   text-decoration: none;
-  transition: background 0.3s;
-  border-radius: 8px;
+  transition: all 0.2s;
+  border-radius: var(--radius-sm);
   margin: 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 400;
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .nav-item.active {
   background: rgba(255, 255, 255, 0.2);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .nav-icon {
-  font-size: 1.25rem;
+  font-size: 1rem;
+  opacity: 0.9;
 }
 
 .nav-text {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .main-content {
   flex: 1;
-  background-color: #f5f5f5;
+  background-color: var(--bg-color);
   overflow-y: auto;
 }
 </style>
