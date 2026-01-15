@@ -74,12 +74,18 @@ func (s *SettingService) InitializeDefaultSettings() error {
 		Value string
 		About string
 	}{
-		"ServerPort":       {"8080", "服务器端口"},
-		"ServerMode":       {"debug", "服务器运行模式"},
-		"SecurityEntrance": {securityEntrance, "安全入口路径"},
-		"Initialized":      {"true", "系统是否已初始化"},
-		"Language":         {"zh-CN", "系统语言"},
-		"Timezone":         {"Asia/Shanghai", "时区设置"},
+		"ServerPort":               {"8080", "服务器端口"},
+		"ServerMode":               {"debug", "服务器运行模式"},
+		"SecurityEntrance":         {securityEntrance, "安全入口路径"},
+		"Initialized":              {"true", "系统是否已初始化"},
+		"Language":                 {"zh-CN", "系统语言"},
+		"Timezone":                 {"Asia/Shanghai", "时区设置"},
+		"PanelUser":                {"admin", "面板用户名"},
+		"PanelPassword":            {"admin123", "面板密码"},
+		"SessionTimeout":           {"86400", "会话超时时间（秒）"},
+		"ServerAddress":            {"", "服务器地址"},
+		"ListenAddress":            {"0.0.0.0", "监听地址"},
+		"PasswordComplexityCheck":  {"false", "密码复杂度验证"},
 	}
 
 	for key, setting := range defaultSettings {

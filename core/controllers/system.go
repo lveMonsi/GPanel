@@ -123,3 +123,9 @@ func ReloadConfig(c *gin.Context) {
 		"message": "Config reloaded successfully",
 	})
 }
+
+func GetVersion(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"version": "v0.0.1",
+	})
+}

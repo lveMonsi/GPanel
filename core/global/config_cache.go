@@ -1,6 +1,7 @@
 package global
 
 import (
+	"fmt"
 	"log"
 	"sync"
 )
@@ -124,6 +125,53 @@ func (cc *ConfigCache) GetTimezone() string {
 func (cc *ConfigCache) IsInitialized() bool {
 	initialized, exists := cc.Get("Initialized")
 	return exists && initialized == "true"
+}
+
+func (cc *ConfigCache) GetPanelUser() string {
+	if user, exists := cc.Get("PanelUser"); exists {
+		return user
+	}
+	return "admin"
+}
+
+func (cc *ConfigCache) GetPanelPassword() string {
+	if password, exists := cc.Get("PanelPassword"); exists {
+		return password
+	}
+	return "admin123"
+}
+
+func (cc *ConfigCache) GetSessionTimeout() int {
+	if timeout, exists := cc.Get("SessionTimeout"); exists {
+		if timeout == "" {
+			return 86400
+		}
+		var result int
+		fmt.Sscanf(timeout, "%d", &result)
+		return result
+	}
+	return 86400
+}
+
+func (cc *ConfigCache) GetServerAddress() string {
+	if address, exists := cc.Get("ServerAddress"); exists {
+		return address
+	}
+	return ""
+}
+
+func (cc *ConfigCache) GetListenAddress() string {
+	if address, exists := cc.Get("ListenAddress"); exists {
+		return address
+	}
+	return "0.0.0.0"
+}
+
+func (cc *ConfigCache) GetPasswordComplexityCheck() bool {
+	if check, exists := cc.Get("PasswordComplexityCheck"); exists {
+		return check == "true"
+	}
+	return false
 }
 
 // NewSettingRepo 创建 SettingRepo 实例（避免循环导入）
