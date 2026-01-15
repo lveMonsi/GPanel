@@ -65,23 +65,39 @@
 
       <div class="info-card processes-card">
         <h3><el-icon><Document /></el-icon> 系统详情</h3>
-        <div v-if="systemInfo" class="processes-details">
-          <div class="detail-row">
-            <span class="detail-label">进程数:</span>
-            <span class="detail-value">{{ systemInfo.procs }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">启动时间:</span>
-            <span class="detail-value">{{ formatBootTime(systemInfo.bootTime) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">内核版本:</span>
-            <span class="detail-value">{{ systemInfo.kernelVersion }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">平台:</span>
-            <span class="detail-value">{{ systemInfo.platform }} ({{ systemInfo.platformFamily }})</span>
-          </div>
+        <div v-if="systemInfo" class="system-details-table">
+          <table class="info-table">
+            <tbody>
+              <tr>
+                <td class="table-label">主机名称</td>
+                <td class="table-value">{{ systemInfo.hostname }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">发行版本</td>
+                <td class="table-value">{{ systemInfo.platform }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">内核版本</td>
+                <td class="table-value">{{ systemInfo.kernelVersion }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">系统类型</td>
+                <td class="table-value">{{ systemInfo.kernelArch }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">主机地址</td>
+                <td class="table-value">{{ systemInfo.hostAddress || '未知' }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">启动时间</td>
+                <td class="table-value">{{ formatBootTime(systemInfo.bootTime) }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">运行时间</td>
+                <td class="table-value">{{ formatUptime(systemInfo.uptime) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <div v-else class="loading">加载中...</div>
       </div>
@@ -156,6 +172,7 @@ interface SystemInfo {
   bootTime: number
   uptime: number
   procs: number
+  hostAddress: string
   currentInfo: CurrentInfo
 }
 
@@ -197,8 +214,18 @@ const formatBootTime = (timestamp: number): string => {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    second: '2-digit'
   })
+}
+
+const formatUptime = (seconds: number): string => {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  return `${days}天 ${hours}小时 ${minutes}分钟 ${secs}秒`
 }
 
 onMounted(() => {
@@ -384,6 +411,40 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.system-details-table {
+  padding: 0.5rem;
+}
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.info-table tbody tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.info-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.info-table td {
+  padding: 0.6rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.table-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  width: 35%;
+}
+
+.table-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
 }
 
 .detail-row {

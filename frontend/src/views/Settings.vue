@@ -9,7 +9,7 @@
         v-model:visible="modalVisible"
         :title="modalTitle"
         :message="modalMessage"
-        :show-confirm="modalTitle === '即将重启面板'"
+        :show-confirm="modalTitle === '即将重启面板' || modalTitle === '安全提醒'"
         @confirm="handleSave"
       />
       <div class="settings-card">
@@ -194,10 +194,12 @@ const fetchConfig = async () => {
   }
 }
 
-const showModal = (title: string, message: string) => {
+const showModal = (title: string, message: string, showConfirm: boolean = false) => {
   modalTitle.value = title
   modalMessage.value = message
   modalVisible.value = true
+  // 存储是否显示确认按钮的状态
+  ;(modalVisible as any).showConfirm = showConfirm
 }
 
 const handleCancel = () => {
@@ -222,9 +224,13 @@ const generateRandomEntrance = () => {
 
 const handleSecurityChange = (value: boolean) => {
   if (!value) {
-    showModal('安全提醒', '关闭安全入口后，任何人都可以访问面板，存在严重安全风险！\n\n建议仅在测试环境或内网环境中关闭。')
+    // 用户尝试关闭安全入口，先弹窗确认
+    // 暂时恢复开关状态
+    config.securityEnabled = true
+    showModal('安全提醒', '关闭安全入口后，任何人都可以访问面板，存在严重安全风险！\n\n建议仅在测试环境或内网环境中关闭。\n\n是否确认关闭？', true)
+  } else {
+    checkConfigChanged()
   }
-  checkConfigChanged()
 }
 
 const checkConfigChanged = () => {
@@ -239,6 +245,14 @@ const showRestartConfirm = () => {
 }
 
 const handleSave = async () => {
+  // 如果是安全提醒弹窗，确认后关闭安全入口
+  if (modalTitle.value === '安全提醒') {
+    config.securityEnabled = false
+    checkConfigChanged()
+    modalVisible.value = false
+    return
+  }
+
   loading.value = true
   try {
     // 将嵌套的配置对象转换为扁平的键值对

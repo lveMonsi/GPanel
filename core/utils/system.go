@@ -2,6 +2,7 @@ package utils
 
 import (
 	"gpanel/models"
+	stdnet "net"
 	"runtime"
 	"time"
 
@@ -28,6 +29,8 @@ func GetSystemInfo() (*models.SystemInfo, error) {
 		return nil, err
 	}
 
+	hostAddr := getHostAddress()
+
 	return &models.SystemInfo{
 		Hostname:        hostInfo.Hostname,
 		OS:              hostInfo.OS,
@@ -39,6 +42,7 @@ func GetSystemInfo() (*models.SystemInfo, error) {
 		BootTime:        hostInfo.BootTime,
 		Uptime:          hostInfo.Uptime,
 		Procs:           procs,
+		HostAddress:     hostAddr,
 		CurrentInfo: models.CurrentInfo{
 			CPUInfo:     cpuInfo,
 			MemoryInfo:  memInfo,
@@ -207,4 +211,20 @@ func GetOSInfo() string {
 
 func GetArchInfo() string {
 	return runtime.GOARCH
+}
+
+func getHostAddress() string {
+	addrs, err := stdnet.InterfaceAddrs()
+	if err != nil {
+		return "未知"
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*stdnet.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "未知"
 }

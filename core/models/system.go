@@ -11,6 +11,7 @@ type SystemInfo struct {
 	BootTime         uint64       `json:"bootTime"`
 	Uptime           uint64       `json:"uptime"`
 	Procs            uint64       `json:"procs"`
+	HostAddress      string       `json:"hostAddress"`
 	CurrentInfo      CurrentInfo  `json:"currentInfo"`
 }
 
