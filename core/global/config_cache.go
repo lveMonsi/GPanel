@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 type ConfigCache struct {
-	mu       sync.RWMutex
-	settings map[string]string
+	mu         sync.RWMutex
+	settings   map[string]string
+	version    int64
+	versionStr string
 }
 
 var ConfigCacheInstance *ConfigCache
@@ -16,7 +19,9 @@ var ConfigCacheInstance *ConfigCache
 func InitConfigCache() error {
 	ConfigCacheInstance = &ConfigCache{
 		settings: make(map[string]string),
+		version:  time.Now().Unix(),
 	}
+	ConfigCacheInstance.versionStr = fmt.Sprintf("%d", ConfigCacheInstance.version)
 
 	settingRepo := NewSettingRepo()
 	settings, err := settingRepo.List()
@@ -28,7 +33,7 @@ func InitConfigCache() error {
 		ConfigCacheInstance.settings[setting.Key] = setting.Value
 	}
 
-	log.Printf("Config cache initialized with %d settings", len(ConfigCacheInstance.settings))
+	log.Printf("Config cache initialized with %d settings, version: %s", len(ConfigCacheInstance.settings), ConfigCacheInstance.versionStr)
 	return nil
 }
 
@@ -70,7 +75,10 @@ func (cc *ConfigCache) Reload() error {
 		cc.settings[setting.Key] = setting.Value
 	}
 
-	log.Printf("Config cache reloaded with %d settings", len(cc.settings))
+	cc.version = time.Now().Unix()
+	cc.versionStr = fmt.Sprintf("%d", cc.version)
+
+	log.Printf("Config cache reloaded with %d settings, new version: %s", len(cc.settings), cc.versionStr)
 	return nil
 }
 
@@ -85,6 +93,12 @@ func (cc *ConfigCache) UpdateSetting(key, value string) error {
 
 	cc.settings[key] = value
 	return nil
+}
+
+func (cc *ConfigCache) GetVersion() string {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.versionStr
 }
 
 func (cc *ConfigCache) GetServerPort() string {

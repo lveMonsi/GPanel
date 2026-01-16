@@ -107,8 +107,8 @@
                   <button type="button" class="btn btn-primary" :disabled="loading" @click="configChanged ? showRestartConfirm() : handleSave()">
                     {{ loading ? '保存中...' : '保存配置' }}
                   </button>
-                  <button type="button" class="btn btn-secondary" @click="handleCancel">
-                    取消
+                  <button type="button" class="btn btn-reset" @click="handleResetToDefault">
+                    重置为默认
                   </button>
                 </div>
               </form>
@@ -187,8 +187,8 @@
                   <button type="button" class="btn btn-primary" :disabled="loading" @click="configChanged ? showRestartConfirm() : handleSave()">
                     {{ loading ? '保存中...' : '保存配置' }}
                   </button>
-                  <button type="button" class="btn btn-secondary" @click="handleCancel">
-                    取消
+                  <button type="button" class="btn btn-reset" @click="handleResetToDefault">
+                    重置为默认
                   </button>
                 </div>
               </form>
@@ -317,6 +317,14 @@ const handleCancel = () => {
   router.push('/dashboard')
 }
 
+const handleResetToDefault = () => {
+  modalTitle.value = '重置为默认配置'
+  modalMessage.value = '确定要将所有配置重置为默认值吗？\n\n注意：安全入口将保持不变。'
+  modalVisible.value = true
+  ;(modalVisible as any).showConfirm = true
+  ;(modalVisible as any).resetConfirm = true
+}
+
 const handlePasswordComplexityChange = (value: boolean) => {
   checkConfigChanged()
 }
@@ -335,6 +343,7 @@ const showRestartConfirm = () => {
 const handleSave = async () => {
   loading.value = true
   try {
+    const isReset = (modalVisible as any).resetConfirm === true
     const flatConfig: Record<string, string> = {
       PanelUser: config.panelUser,
       PanelPassword: config.panelPassword,
@@ -344,6 +353,18 @@ const handleSave = async () => {
       ListenAddress: config.listenAddress,
       SecurityEntrance: config.securityEntrance,
       PasswordComplexityCheck: config.passwordComplexityCheck ? 'true' : 'false'
+    }
+
+    if (isReset) {
+      const currentSecurityEntrance = config.securityEntrance
+      flatConfig.PanelUser = 'admin'
+      flatConfig.PanelPassword = 'admin123'
+      flatConfig.SessionTimeout = '86400'
+      flatConfig.ServerAddress = ''
+      flatConfig.ServerPort = '8080'
+      flatConfig.ListenAddress = '0.0.0.0'
+      flatConfig.SecurityEntrance = currentSecurityEntrance
+      flatConfig.PasswordComplexityCheck = 'false'
     }
 
     await axios.post('/api/v1/config', flatConfig)
@@ -624,6 +645,17 @@ const handleEditSave = (value: string) => {
 .btn-secondary:hover {
   background: var(--border-color);
   color: var(--text-primary);
+}
+
+.btn-reset {
+  background: #fff0f0;
+  color: #e74c3c;
+  border: 1px solid #fadbd8;
+}
+
+.btn-reset:hover {
+  background: #fadbd8;
+  border-color: #e74c3c;
 }
 
 .switch-wrapper {

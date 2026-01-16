@@ -37,6 +37,7 @@
       </div>
       <div class="edit-modal-footer">
         <button class="btn btn-secondary" @click="handleCancel">取消</button>
+        <button class="btn btn-reset" @click="handleReset">重置</button>
         <button class="btn btn-primary" @click="handleSave">保存</button>
       </div>
     </div>
@@ -104,6 +105,10 @@ const handleCancel = () => {
 const handleSave = () => {
   emit('save', inputValue.value)
   inputValue.value = ''
+}
+
+const handleReset = () => {
+  inputValue.value = props.fieldValue
 }
 
 // 监听 visible 变化，自动聚焦输入框
@@ -271,6 +276,17 @@ watch(() => props.visible, (newVal) => {
 .btn-secondary:hover {
   background: var(--border-color);
   color: var(--text-primary);
+}
+
+.btn-reset {
+  background: #fff0f0;
+  color: #e74c3c;
+  border: 1px solid #fadbd8;
+}
+
+.btn-reset:hover {
+  background: #fadbd8;
+  border-color: #e74c3c;
 }
 
 .input-with-button {
