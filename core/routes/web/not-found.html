@@ -1,65 +1,4 @@
-package middleware
-
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"gpanel/global"
-	"net/http"
-	"strings"
-
-	"github.com/gin-gonic/gin"
-)
-
-// SecurityEntrance 验证安全入口
-func SecurityEntrance() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		path := c.Request.URL.Path
-		
-		// 跳过API路由、静态资源和登录页面
-		if strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || path == "/login" || path == "/dashboard" {
-			c.Next()
-			return
-		}		// 获取配置的安全入口
-		var securityEntrance string
-		if global.ConfigCacheInstance != nil {
-			securityEntrance = global.ConfigCacheInstance.GetSecurityEntrance()
-		} else {
-			securityEntrance = "/"
-		}
-
-		// 确保安全入口以/开头
-		if !strings.HasPrefix(securityEntrance, "/") {
-			securityEntrance = "/" + securityEntrance
-		}
-
-		// 如果安全入口是/，则允许所有路径，不校验sessionkey
-		if securityEntrance == "/" {
-			c.Next()
-			return
-		}
-
-		// 检查请求路径是否匹配安全入口
-		if path == securityEntrance {
-			// 生成随机的 sessionkey
-			sessionKey := generateSessionKey()
-
-			// 设置 sessionkey cookie，30分钟过期
-			// 使用 SameSite=Lax 允许跨站点导航时发送 cookie
-			c.SetSameSite(http.SameSiteLaxMode)
-			c.SetCookie("sessionkey", sessionKey, 1800, "/", "", false, false)
-
-			// 重定向到登录页面
-			c.Redirect(http.StatusFound, "/login")
-			c.Abort()
-			return
-		}
-
-		// 对于其他所有路径，检查是否有有效的 sessionkey
-		sessionKey, err := c.Cookie("sessionkey")
-		if err != nil || sessionKey == "" {
-			// 没有 sessionkey，返回404提示页面
-			c.Header("Content-Type", "text/html; charset=utf-8")
-			c.String(http.StatusOK, `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -170,19 +109,4 @@ func SecurityEntrance() gin.HandlerFunc {
         </div>
     </div>
 </body>
-</html>`)
-			c.Abort()
-			return
-		}
-
-		// 有 sessionkey，放行
-		c.Next()
-	}
-}
-
-// generateSessionKey 生成随机的 sessionkey
-func generateSessionKey() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
+</html>

@@ -38,6 +38,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Settings.vue')
       }
     ]
+  },
+  {
+    path: '/files',
+    name: 'Files',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '/files',
+        name: 'FilesMain',
+        component: () => import('@/views/Files.vue')
+      }
+    ]
   }
 ]
 
@@ -55,23 +68,21 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   const hasSessionKey = checkSessionKey()
 
+  // 如果访问登录页面
+  if (to.path === '/login') {
+    // 如果有 token，重定向到 dashboard
+    if (token) {
+      next('/dashboard')
+      return
+    }
+    // 没有 token，允许访问登录页面
+    next()
+    return
+  }
+
   // 如果需要认证但没有 token
   if (to.meta.requiresAuth && !token) {
     next('/login')
-    return
-  }
-
-  // 如果访问登录页面但有 token
-  if (to.path === '/login' && token) {
-    next('/dashboard')
-    return
-  }
-
-  // 如果访问登录页面但没有 sessionkey 且有 token（说明 sessionkey 已过期）
-  if (to.path === '/login' && !hasSessionKey && token) {
-    alert('登录已失效，请重新从安全入口进入登录页面')
-    localStorage.removeItem('token')
-    // 不跳转，让后端返回404页面
     return
   }
 
