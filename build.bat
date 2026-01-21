@@ -38,6 +38,10 @@ echo [1/5] Cleaning build artifacts...
 if exist "%BUILD_PATH%" rmdir /s /q "%BUILD_PATH%"
 if exist "%WEB_DIST_PATH%" rmdir /s /q "%WEB_DIST_PATH%"
 if exist "%WEB_PATH%\dist" rmdir /s /q "%WEB_PATH%\dist"
+@REM if exist "%CORE_PATH%\web\dist" rmdir /s /q "%CORE_PATH%\web\dist"
+if exist "%CORE_PATH%\routes\web\dist" rmdir /s /q "%CORE_PATH%\routes\web\dist"
+if exist "%WEB_PATH%\.vite" rmdir /s /q "%WEB_PATH%\.vite"
+@REM if exist "%WEB_PATH%\node_modules\.vite" rmdir /s /q "%WEB_PATH%\node_modules\.vite"
 echo Clean completed
 
 echo.
@@ -61,14 +65,33 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo [4/5] Copying frontend build artifacts...
-if not exist "%WEB_DIST_PATH%" mkdir "%WEB_DIST_PATH%"
-xcopy /E /Y /I "%WEB_PATH%\dist" "%WEB_DIST_PATH%"
-echo Frontend artifacts copied
+set ROUTES_WEB_DIST=%CORE_PATH%\routes\web\dist
+if not exist "%ROUTES_WEB_DIST%" mkdir "%ROUTES_WEB_DIST%"
+xcopy /E /Y /I "%WEB_PATH%\dist" "%ROUTES_WEB_DIST%"
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Failed to copy frontend artifacts
+    pause
+    exit /b 1
+)
+echo Frontend artifacts copied to %ROUTES_WEB_DIST%
+echo Verifying copied files...
+if not exist "%ROUTES_WEB_DIST%\index.html" (
+    echo [ERROR] index.html not found in %ROUTES_WEB_DIST%
+    pause
+    exit /b 1
+)
+echo Verification completed
 
 echo.
 echo [5/5] Building backend binaries...
 
 if not exist "%BUILD_PATH%" mkdir "%BUILD_PATH%"
+
+@REM echo Cleaning Go build cache...
+@REM cd "%CORE_PATH%"
+@REM go clean -cache
+@REM go clean -modcache
+@REM echo Go cache cleaned
 
 echo Building Windows amd64 version...
 cd "%CORE_PATH%"

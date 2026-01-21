@@ -30,16 +30,35 @@ export default defineConfig({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true, // 生产环境移除 console
+        drop_console: false, // 暂时不禁用 console，以便调试
         drop_debugger: true
       }
     },
+    chunkSizeWarningLimit: 1000, // 调整 chunk 大小警告限制为 1000KB
     rollupOptions: {
       output: {
-        // 代码分割
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'http-vendor': ['axios']
+        // 细粒度代码分割
+        manualChunks(id) {
+          // Vue 核心库
+          if (id.includes('node_modules/vue/') || id.includes('node_modules/vue-router/') || id.includes('node_modules/pinia/')) {
+            return 'vue-vendor'
+          }
+          // Element Plus 组件库
+          if (id.includes('node_modules/element-plus/')) {
+            return 'element-plus'
+          }
+          // Element Plus 图标库
+          if (id.includes('node_modules/@element-plus/icons-vue/')) {
+            return 'element-icons'
+          }
+          // HTTP 客户端
+          if (id.includes('node_modules/axios/')) {
+            return 'http-vendor'
+          }
+          // 其他第三方库
+          if (id.includes('node_modules/')) {
+            return 'vendor'
+          }
         }
       }
     },

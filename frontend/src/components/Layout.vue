@@ -55,6 +55,7 @@ const handleLogout = () => {
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
 .sidebar-header {
@@ -106,6 +107,8 @@ const handleLogout = () => {
   margin: 0 0.5rem;
   font-size: 0.85rem;
   font-weight: 400;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .nav-item:hover {

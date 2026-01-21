@@ -20,7 +20,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       {
-        path: '/dashboard',
+        path: '',
         name: 'DashboardMain',
         component: () => import('@/views/Dashboard.vue')
       }
@@ -33,7 +33,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       {
-        path: '/settings',
+        path: '',
         name: 'SettingsMain',
         component: () => import('@/views/Settings.vue')
       }
@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       {
-        path: '/files',
+        path: '',
         name: 'FilesMain',
         component: () => import('@/views/Files.vue')
       }
