@@ -1,42 +1,89 @@
 <template>
-  <div class="file-manager h-full flex flex-col">
-    <!-- 工具栏 -->
-    <div class="toolbar p-4 border-b bg-white flex items-center gap-4 flex-wrap">
-      <el-button-group>
-        <el-button :icon="ArrowLeft" @click="goBack" :disabled="currentPath === ''">返回</el-button>
-        <el-button :icon="Refresh" @click="refresh">刷新</el-button>
-      </el-button-group>
+  <div class="file-manager">
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+      <!-- 左侧：导航按钮 -->
+      <div class="toolbar-left">
+        <el-tooltip content="返回上级" placement="top">
+          <el-button :icon="ArrowLeft" circle @click="goBack" :disabled="currentPath === '/'" />
+        </el-tooltip>
+        <el-tooltip content="刷新" placement="top">
+          <el-button :icon="Refresh" circle @click="refresh" />
+        </el-tooltip>
+        <el-tooltip :content="showHidden ? '隐藏隐藏文件' : '显示隐藏文件'" placement="top">
+          <el-button circle :type="showHidden ? 'primary' : ''" :icon="showHidden ? View : Hide" @click="toggleHidden" />
+        </el-tooltip>
+      </div>
 
-      <el-input
-        v-model="currentPath"
-        placeholder="输入路径"
-        @keyup.enter="navigateToPath"
-        class="path-input"
-      >
-        <template #append>
-          <el-button :icon="FolderOpened" @click="navigateToPath">跳转</el-button>
-        </template>
-      </el-input>
+      <!-- 中间：面包屑导航 -->
+      <div class="breadcrumb">
+        <el-link @click.stop="jump('/')" :underline="false">
+          <el-icon :size="18" color="#606266"><HomeFilled /></el-icon>
+        </el-link>
+        <span v-for="(path, index) in pathSegments" :key="index" class="breadcrumb-segment">
+          <span class="breadcrumb-separator">/</span>
+          <el-tooltip :content="path.name" placement="bottom" :disabled="path.name.length <= 20">
+            <el-link
+              :underline="false"
+              class="path-segment"
+              @click.stop="jump(path.url)"
+            >
+              {{ path.name.length > 20 ? path.name.substring(0, 18) + '...' : path.name }}
+            </el-link>
+          </el-tooltip>
+        </span>
+      </div>
 
-      <el-button type="primary" :icon="FolderAdd" @click="showCreateDirDialog" :disabled="currentPath === ''">新建目录</el-button>
-      <el-button type="primary" :icon="DocumentAdd" @click="showCreateFileDialog" :disabled="currentPath === ''">新建文件</el-button>
-      <el-button type="primary" :icon="Upload" @click="showUploadDialog" :disabled="currentPath === ''">上传文件</el-button>
-      <el-button type="primary" :icon="Operation" @click="showCompressDialog" :disabled="selectedFiles.length === 0">压缩</el-button>
-      <el-button type="primary" :icon="Operation" @click="showChmodDialog" :disabled="selectedFiles.length === 0">权限</el-button>
+      <!-- 右侧：搜索框 -->
+      <div class="toolbar-right">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索文件"
+          :prefix-icon="Search"
+          @input="handleSearch"
+          @clear="handleSearch"
+          clearable
+          class="search-input"
+        />
+      </div>
+    </div>
 
-      <el-checkbox v-model="showHidden">显示隐藏文件</el-checkbox>
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <!-- 左侧操作按钮 -->
+      <div class="action-bar-left">
+        <el-dropdown @command="handleCreate">
+          <el-button type="primary">
+            新建
+            <el-icon class="ml-1"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="dir" :icon="FolderAdd">新建目录</el-dropdown-item>
+              <el-dropdown-item command="file" :icon="DocumentAdd">新建文件</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
 
-      <el-input
-        v-model="searchKeyword"
-        placeholder="搜索文件"
-        :prefix-icon="Search"
-        @input="handleSearch"
-        class="search-input"
-      />
+        <el-button :icon="Upload" @click="showUploadDialog" :disabled="currentPath === '/'">
+          上传文件
+        </el-button>
+
+        <el-button-group v-if="selectedFiles.length > 0">
+          <el-button :icon="Operation" @click="showCompressDialog">压缩</el-button>
+          <el-button :icon="Operation" @click="showChmodDialog">权限</el-button>
+          <el-button :icon="Delete" type="danger" @click="batchDelete">删除</el-button>
+        </el-button-group>
+      </div>
+
+      <!-- 右侧信息 -->
+      <div class="action-bar-right">
+        共 {{ fileList.length }} 项
+      </div>
     </div>
 
     <!-- 文件列表 -->
-    <div class="file-list flex-1 overflow-auto p-4">
+    <div class="file-list">
       <el-table
         :data="fileList"
         @row-click="handleRowClick"
@@ -44,71 +91,81 @@
         @selection-change="handleSelectionChange"
         height="100%"
         stripe
+        class="file-table"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="name" label="名称" min-width="200">
+        <el-table-column type="selection" width="45" />
+        <el-table-column prop="name" label="名称" min-width="250" sortable>
           <template #default="{ row }">
-            <div class="flex items-center gap-2">
+            <div class="file-name-cell">
               <el-icon v-if="row.isDir" :size="20" color="#409eff"><Folder /></el-icon>
               <el-icon v-else :size="20" color="#909399"><Document /></el-icon>
-              <span>{{ row.name }}</span>
-              <el-tag v-if="row.isSymlink" size="small" type="info">链接</el-tag>
+              <span class="file-name">{{ row.name }}</span>
+              <el-tag v-if="row.isSymlink" size="small" type="info" effect="plain">链接</el-tag>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="size" label="大小" width="120">
+        <el-table-column prop="size" label="大小" width="120" sortable>
           <template #default="{ row }">
-            {{ row.isDir ? '-' : formatSize(row.size) }}
+            <span class="file-meta">{{ row.isDir ? '-' : formatSize(row.size) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="mode" label="权限" width="100" />
         <el-table-column prop="user" label="用户" width="100" />
         <el-table-column prop="group" label="组" width="100" />
-        <el-table-column prop="modTime" label="修改时间" width="180">
+        <el-table-column prop="modTime" label="修改时间" width="180" sortable>
           <template #default="{ row }">
-            {{ formatDate(row.modTime) }}
+            <span class="file-meta">{{ formatDate(row.modTime) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button-group>
-              <el-button size="small" :icon="Edit" @click.stop="editFile(row)" :disabled="row.isDir">编辑</el-button>
-                              <el-button size="small" :icon="Download" @click.stop="downloadFile(row)" :disabled="row.isDir">下载</el-button>
-                              <el-button size="small" :icon="FolderOpened" @click.stop="decompressFile(row)" :disabled="!isCompressedFile(row)">解压</el-button>
-                              <el-button size="small" :icon="Delete" type="danger" @click.stop="deleteFile(row)">删除</el-button>            </el-button-group>
+              <el-tooltip content="编辑" placement="top">
+                <el-button size="small" :icon="Edit" @click.stop="editFile(row)" :disabled="row.isDir" />
+              </el-tooltip>
+              <el-tooltip content="下载" placement="top">
+                <el-button size="small" :icon="Download" @click.stop="downloadFile(row)" :disabled="row.isDir" />
+              </el-tooltip>
+              <el-tooltip content="解压" placement="top">
+                <el-button size="small" :icon="FolderOpened" @click.stop="decompressFile(row)" :disabled="!isCompressedFile(row)" />
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button size="small" :icon="Delete" type="danger" @click.stop="deleteFile(row)" />
+              </el-tooltip>
+            </el-button-group>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
     <!-- 创建目录对话框 -->
-    <el-dialog v-model="createDirDialogVisible" title="新建目录" width="400px">
+    <el-dialog v-model="createDirDialogVisible" title="新建目录" width="450px" :close-on-click-modal="false">
       <el-form :model="createDirForm" label-width="80px">
-        <el-form-item label="目录名">
-          <el-input v-model="createDirForm.name" placeholder="请输入目录名" />
+        <el-form-item label="目录名" required>
+          <el-input v-model="createDirForm.name" placeholder="请输入目录名" clearable @keyup.enter="createDir" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createDirDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="createDir">确定</el-button>
+        <el-button type="primary" @click="createDir" :loading="creating">确定</el-button>
       </template>
     </el-dialog>
 
     <!-- 创建文件对话框 -->
-    <el-dialog v-model="createFileDialogVisible" title="新建文件" width="400px">
+    <el-dialog v-model="createFileDialogVisible" title="新建文件" width="450px" :close-on-click-modal="false">
       <el-form :model="createFileForm" label-width="80px">
-        <el-form-item label="文件名">
-          <el-input v-model="createFileForm.name" placeholder="请输入文件名" />
+        <el-form-item label="文件名" required>
+          <el-input v-model="createFileForm.name" placeholder="请输入文件名" clearable @keyup.enter="createFile" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createFileDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="createFile">确定</el-button>
+        <el-button type="primary" @click="createFile" :loading="creating">确定</el-button>
       </template>
     </el-dialog>
 
     <!-- 上传文件对话框 -->
-    <el-dialog v-model="uploadDialogVisible" title="上传文件" width="500px">
+    <el-dialog v-model="uploadDialogVisible" title="上传文件" width="550px" :close-on-click-modal="false">
       <el-upload
         ref="uploadRef"
         :auto-upload="false"
@@ -116,11 +173,17 @@
         :file-list="uploadFileList"
         drag
         multiple
+        class="upload-area"
       >
-        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">
-          将文件拖到此处，或<em>点击上传</em>
+        <el-icon class="el-icon--upload" :size="50" color="#409eff"><UploadFilled /></el-icon>
+        <div class="el-upload__text mt-2">
+          将文件拖到此处，或<em class="text-blue-600">点击上传</em>
         </div>
+        <template #tip>
+          <div class="el-upload__tip text-gray-500 mt-2">
+            支持上传多个文件
+          </div>
+        </template>
       </el-upload>
       <el-checkbox v-model="overwrite" class="mt-4">覆盖已存在的文件</el-checkbox>
       <template #footer>
@@ -139,13 +202,13 @@
     />
 
     <!-- 压缩对话框 -->
-    <el-dialog v-model="compressDialogVisible" title="压缩文件" width="400px">
+    <el-dialog v-model="compressDialogVisible" title="压缩文件" width="450px" :close-on-click-modal="false">
       <el-form :model="compressForm" label-width="80px">
-        <el-form-item label="压缩名称">
-          <el-input v-model="compressForm.name" placeholder="请输入压缩文件名" />
+        <el-form-item label="压缩名称" required>
+          <el-input v-model="compressForm.name" placeholder="请输入压缩文件名" clearable />
         </el-form-item>
-        <el-form-item label="压缩格式">
-          <el-select v-model="compressForm.type" placeholder="选择压缩格式">
+        <el-form-item label="压缩格式" required>
+          <el-select v-model="compressForm.type" placeholder="选择压缩格式" style="width: 100%">
             <el-option label="tar.gz" value="tar.gz" />
             <el-option label="zip" value="zip" />
           </el-select>
@@ -158,13 +221,15 @@
     </el-dialog>
 
     <!-- 权限修改对话框 -->
-    <el-dialog v-model="chmodDialogVisible" title="修改权限" width="400px">
+    <el-dialog v-model="chmodDialogVisible" title="修改权限" width="450px" :close-on-click-modal="false">
       <el-form :model="chmodForm" label-width="80px">
-        <el-form-item label="权限模式">
-          <el-input v-model="chmodForm.mode" placeholder="例如: 755" maxlength="3" />
+        <el-form-item label="权限模式" required>
+          <el-input v-model="chmodForm.mode" placeholder="例如: 755" maxlength="3" clearable />
+          <div class="text-xs text-gray-500 mt-1">请输入 3 位数字权限，如 755、644</div>
         </el-form-item>
         <el-form-item label="递归修改">
           <el-switch v-model="chmodForm.sub" />
+          <div class="text-xs text-gray-500 mt-1">是否递归修改子目录和文件</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -176,8 +241,8 @@
 </template>
 
 <script setup lang="ts">
-// 版本：2025-01-20-fix-path-conversion
-import { ref, onMounted, watch, onBeforeMount } from 'vue';
+// 版本：2025-01-21-optimized-ui
+import { ref, onMounted, watch, onBeforeMount, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   ArrowLeft,
@@ -194,6 +259,10 @@ import {
   Delete,
   UploadFilled,
   Operation,
+  HomeFilled,
+  View,
+  Hide,
+  ArrowDown,
 } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
 import type { FileInfo } from '@/api/interface/file';
@@ -228,6 +297,26 @@ const chmodForm = ref({ mode: '755', sub: false });
 
 const editorVisible = ref(false);
 const editingFilePath = ref('');
+const creating = ref(false);
+
+// 面包屑导航路径段
+const pathSegments = computed(() => {
+  if (currentPath.value === '/') {
+    return [];
+  }
+  const path = currentPath.value.replace(/\\/g, '/');
+  const parts = path.split('/').filter(p => p);
+  const segments: Array<{ name: string; url: string }> = [];
+  let currentUrl = '';
+  parts.forEach((part, index) => {
+    currentUrl += '/' + part;
+    segments.push({
+      name: part,
+      url: currentUrl,
+    });
+  });
+  return segments;
+});
 
 // 将显示路径转换为后端路径
 const toBackendPath = (displayPath: string): string => {
@@ -368,6 +457,15 @@ const loadFileList = async () => {
 
 const refresh = () => {
   loadFileList();
+};
+
+const jump = (path: string) => {
+  currentPath.value = path;
+  loadFileList();
+};
+
+const toggleHidden = () => {
+  showHidden.value = !showHidden.value;
 };
 
 const goBack = () => {
@@ -722,6 +820,48 @@ const chmodFiles = async () => {
   }
 };
 
+const batchDelete = async () => {
+  if (selectedFiles.value.length === 0) {
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedFiles.value.length} 个项目吗？`,
+      '批量删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+    for (const file of selectedFiles.value) {
+      const backendPath = toBackendPath(file.path);
+      const response = await fileApi.deleteFile({
+        path: backendPath,
+        force: true,
+      });
+      if (response.data.code !== 200) {
+        ElMessage.error(`删除 ${file.name} 失败: ${response.data.message}`);
+        return;
+      }
+    }
+    ElMessage.success('批量删除成功');
+    loadFileList();
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '批量删除失败');
+    }
+  }
+};
+
+const handleCreate = (command: string) => {
+  if (command === 'dir') {
+    showCreateDirDialog();
+  } else if (command === 'file') {
+    showCreateFileDialog();
+  }
+};
+
 watch(showHidden, () => {
   loadFileList();
 });
@@ -738,24 +878,227 @@ onMounted(() => {
 
 <style scoped>
 .file-manager {
-  background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f5f7fa;
 }
 
 .toolbar {
-  background: white;
+  display: flex;
+  align-items: center;
   gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #e4e7ed;
+  flex-wrap: wrap;
 }
 
-.path-input {
-  width: 400px;
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.breadcrumb {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  overflow: hidden;
+}
+
+.breadcrumb-segment {
+  display: inline-flex;
+  align-items: center;
+}
+
+.breadcrumb-separator {
+  margin: 0 8px;
+  color: #909399;
+}
+
+.path-segment {
+  font-size: 14px;
+  color: #606266;
+  transition: color 0.2s;
+  margin-right: 8px;
+}
+
+.path-segment:hover {
+  color: #409eff;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: white;
+  border-bottom: 1px solid #e4e7ed;
+  flex-wrap: wrap;
+}
+
+.action-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-bar-right {
+  font-size: 14px;
+  color: #909399;
 }
 
 .search-input {
-  width: 200px;
-  margin-left: auto;
+  width: 280px;
 }
 
 .file-list {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
   background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin: 16px;
+}
+
+.file-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.file-table :deep(.el-table__header-wrapper) {
+  background: #f5f7fa;
+}
+
+.file-table :deep(.el-table__header th) {
+  background: #f5f7fa;
+  font-weight: 600;
+  color: #303133;
+}
+
+.file-table :deep(.el-table__row) {
+  transition: background-color 0.2s;
+}
+
+.file-table :deep(.el-table__row:hover) {
+  background-color: #f5f7fa !important;
+}
+
+.file-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-name {
+  font-weight: 500;
+  color: #303133;
+}
+
+.file-meta {
+  color: #606266;
+}
+
+.upload-area {
+  padding: 20px;
+}
+
+.upload-area :deep(.el-upload-dragger) {
+  padding: 40px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.upload-area :deep(.el-upload-dragger:hover) {
+  border-color: #409eff;
+  background-color: #f0f9ff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left {
+    justify-content: center;
+  }
+
+  .breadcrumb {
+    order: 3;
+    width: 100%;
+  }
+
+  .toolbar-right {
+    width: 100%;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action-bar-left {
+    justify-content: center;
+  }
+
+  .action-bar-right {
+    text-align: center;
+  }
+
+  .file-table :deep(.el-table__body-wrapper) {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 576px) {
+  .breadcrumb {
+    display: none;
+  }
+
+  .toolbar-right {
+    order: 2;
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toolbar,
+.action-bar {
+  animation: fadeIn 0.3s ease-out;
 }
 </style>
