@@ -1,85 +1,183 @@
 <template>
   <div class="system-status">
-    <div class="status-grid">
-      <div class="status-card cpu-card">
-        <div class="card-header">
+    <div class="gauge-grid">
+      <div class="gauge-card" ref="cpuCard" @mouseenter="(e) => showTooltip('cpu', e)" @mouseleave="hideTooltip">
+        <div class="gauge-header">
           <el-icon class="icon"><Monitor /></el-icon>
           <span class="title">CPU</span>
         </div>
-        <div class="card-content">
-          <div class="value">{{ cpuInfo.usedPercent.toFixed(1) }}%</div>
-          <div class="label">使用率</div>
-          <div class="details">
-            <div class="detail-item">
-              <span class="detail-label">核心数:</span>
-              <span class="detail-value">{{ cpuInfo.cores }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">逻辑核心:</span>
-              <span class="detail-value">{{ cpuInfo.logicalCores }}</span>
+        <GaugeChart
+          :value="cpuInfo.usedPercent"
+          label="使用率"
+          :sub-label="`核心: ${cpuInfo.cores}`"
+          unit="%"
+        />
+        <!-- CPU 悬浮详情 -->
+        <div v-if="tooltipType === 'cpu'" :class="['tooltip', { 'tooltip-bottom': tooltipDirection === 'bottom' }]">
+          <div class="tooltip-header">
+            <el-icon><Monitor /></el-icon>
+            <span>CPU 详情</span>
+          </div>
+          <div class="tooltip-content">
+            <div class="cpu-columns">
+              <div class="tooltip-section">
+                <div class="section-title">{{ cpuInfo.modelName }}</div>
+                <div class="info-row">
+                  <span class="info-label">物理核心</span>
+                  <span class="info-value">{{ cpuInfo.cores }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">逻辑核心</span>
+                  <span class="info-value">{{ cpuInfo.logicalCores }}</span>
+                </div>
+              </div>
+              <div class="tooltip-section">
+                <div class="section-title">核心使用率</div>
+                <div v-for="(percent, index) in cpuInfo.perCorePercent" :key="index" class="info-row">
+                  <span class="info-label">CPU-{{ index }}</span>
+                  <span class="info-value">{{ percent.toFixed(0) }}%</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: cpuInfo.usedPercent + '%' }"></div>
-        </div>
       </div>
 
-      <div class="status-card memory-card">
-        <div class="card-header">
+      <div class="gauge-card" ref="memoryCard" @mouseenter="(e) => showTooltip('memory', e)" @mouseleave="hideTooltip">
+        <div class="gauge-header">
           <el-icon class="icon"><Cpu /></el-icon>
           <span class="title">内存</span>
         </div>
-        <div class="card-content">
-          <div class="value">{{ memoryInfo.usedPercent.toFixed(1) }}%</div>
-          <div class="label">使用率</div>
-          <div class="details">
-            <div class="detail-item">
-              <span class="detail-label">已用:</span>
-              <span class="detail-value">{{ formatBytes(memoryInfo.used) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">总计:</span>
-              <span class="detail-value">{{ formatBytes(memoryInfo.total) }}</span>
+        <GaugeChart
+          :value="memoryInfo.usedPercent"
+          label="使用率"
+          :sub-label="`${formatBytes(memoryInfo.used)} / ${formatBytes(memoryInfo.total)}`"
+          unit="%"
+        />
+        <!-- 内存悬浮详情 -->
+        <div v-if="tooltipType === 'memory'" :class="['tooltip', { 'tooltip-bottom': tooltipDirection === 'bottom' }]">
+          <div class="tooltip-header">
+            <el-icon><Cpu /></el-icon>
+            <span>内存详情</span>
+          </div>
+          <div class="tooltip-content">
+            <div class="tooltip-section">
+              <div class="section-title">系统</div>
+              <div class="info-row">
+                <span class="info-label">总数</span>
+                <span class="info-value">{{ formatBytes(memoryInfo.total) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">已用</span>
+                <span class="info-value">{{ formatBytes(memoryInfo.used) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">可用</span>
+                <span class="info-value">{{ formatBytes(memoryInfo.available) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">使用率</span>
+                <span class="info-value">{{ memoryInfo.usedPercent.toFixed(2) }}%</span>
+              </div>
             </div>
           </div>
         </div>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: memoryInfo.usedPercent + '%' }"></div>
-        </div>
       </div>
 
-      <div class="status-card load-card">
-        <div class="card-header">
+      <div class="gauge-card" ref="loadCard" @mouseenter="(e) => showTooltip('load', e)" @mouseleave="hideTooltip">
+        <div class="gauge-header">
           <el-icon class="icon"><TrendCharts /></el-icon>
           <span class="title">负载</span>
         </div>
-        <div class="card-content">
-          <div class="load-values">
-            <div class="load-item">
-              <span class="load-label">1分钟</span>
-              <span class="load-value">{{ loadInfo.load1.toFixed(2) }}</span>
+        <GaugeChart
+          :value="loadInfo.load1"
+          :max-value="cpuInfo.logicalCores"
+          label="1分钟负载"
+          :sub-label="`5分钟: ${loadInfo.load5.toFixed(2)}`"
+        />
+        <!-- 负载悬浮详情 -->
+        <div v-if="tooltipType === 'load'" :class="['tooltip', { 'tooltip-bottom': tooltipDirection === 'bottom' }]">
+          <div class="tooltip-header">
+            <el-icon><TrendCharts /></el-icon>
+            <span>负载详情</span>
+          </div>
+          <div class="tooltip-content">
+            <div class="info-row">
+              <span class="info-label">最近 1 分钟平均负载</span>
+              <span class="info-value">{{ loadInfo.load1.toFixed(2) }}</span>
             </div>
-            <div class="load-item">
-              <span class="load-label">5分钟</span>
-              <span class="load-value">{{ loadInfo.load5.toFixed(2) }}</span>
+            <div class="info-row">
+              <span class="info-label">最近 5 分钟平均负载</span>
+              <span class="info-value">{{ loadInfo.load5.toFixed(2) }}</span>
             </div>
-            <div class="load-item">
-              <span class="load-label">15分钟</span>
-              <span class="load-value">{{ loadInfo.load15.toFixed(2) }}</span>
+            <div class="info-row">
+              <span class="info-label">最近 15 分钟平均负载</span>
+              <span class="info-value">{{ loadInfo.load15.toFixed(2) }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="status-card uptime-card">
-        <div class="card-header">
-          <el-icon class="icon"><Timer /></el-icon>
-          <span class="title">运行时间</span>
+      <div class="gauge-card" ref="diskCard" @mouseenter="(e) => showTooltip('disk', e)" @mouseleave="hideTooltip">
+        <div class="gauge-header">
+          <el-icon class="icon"><Coin /></el-icon>
+          <span class="title">存储</span>
         </div>
-        <div class="card-content">
-          <div class="uptime-value">{{ formatUptime(uptime) }}</div>
-          <div class="uptime-label">系统运行时间</div>
+        <GaugeChart
+          :value="diskInfo.length > 0 ? diskInfo[0].usedPercent : 0"
+          label="主盘使用率"
+          :sub-label="diskInfo.length > 0 ? `${formatBytes(diskInfo[0].used)} / ${formatBytes(diskInfo[0].total)}` : '无数据'"
+          unit="%"
+        />
+        <!-- 存储悬浮详情 -->
+        <div v-if="tooltipType === 'disk'" :class="['tooltip', { 'tooltip-bottom': tooltipDirection === 'bottom' }]">
+          <div class="tooltip-header">
+            <el-icon><Coin /></el-icon>
+            <span>存储详情</span>
+          </div>
+          <div class="tooltip-content">
+            <template v-if="diskInfo.length > 0">
+              <div v-for="disk in diskInfo" :key="disk.mountpoint" class="disk-section">
+                <div class="disk-columns">
+                  <div class="tooltip-section">
+                    <div class="section-title">基本信息</div>
+                    <div class="info-row">
+                      <span class="info-label">挂载点</span>
+                      <span class="info-value">{{ disk.mountpoint }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">类型</span>
+                      <span class="info-value">{{ disk.fstype }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">文件系统</span>
+                      <span class="info-value">{{ disk.device }}</span>
+                    </div>
+                  </div>
+                  <div class="tooltip-section">
+                    <div class="section-title">磁盘</div>
+                    <div class="info-row">
+                      <span class="info-label">总数</span>
+                      <span class="info-value">{{ formatBytes(disk.total) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">已用</span>
+                      <span class="info-value">{{ formatBytes(disk.used) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">可用</span>
+                      <span class="info-value">{{ formatBytes(disk.free) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">使用率</span>
+                      <span class="info-value">{{ disk.usedPercent.toFixed(2) }}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div v-else class="no-data">无数据</div>
+          </div>
         </div>
       </div>
     </div>
@@ -87,7 +185,9 @@
 </template>
 
 <script setup lang="ts">
-import { Monitor, Cpu, TrendCharts, Timer } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { Monitor, Cpu, TrendCharts, Coin } from '@element-plus/icons-vue'
+import GaugeChart from './GaugeChart.vue'
 
 interface CPUInfo {
   cores: number
@@ -114,12 +214,42 @@ interface LoadInfo {
   load15: number
 }
 
+interface DiskInfo {
+  device: string
+  mountpoint: string
+  fstype: string
+  total: number
+  used: number
+  free: number
+  usedPercent: number
+}
+
 defineProps<{
   cpuInfo: CPUInfo
   memoryInfo: MemoryInfo
   loadInfo: LoadInfo
-  uptime: number
+  diskInfo: DiskInfo[]
 }>()
+
+const tooltipType = ref<'cpu' | 'memory' | 'load' | 'disk' | null>(null)
+const tooltipDirection = ref<'top' | 'bottom'>('top')
+
+const showTooltip = (type: 'cpu' | 'memory' | 'load' | 'disk', event: MouseEvent) => {
+  tooltipType.value = type
+
+  // 获取目标元素的位置
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const viewportHeight = window.innerHeight
+  const elementCenter = rect.top + rect.height / 2
+
+  // 如果元素在视口上半部分，向下弹出；否则向上弹出
+  tooltipDirection.value = elementCenter < viewportHeight / 2 ? 'bottom' : 'top'
+}
+
+const hideTooltip = () => {
+  tooltipType.value = null
+}
 
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B'
@@ -128,149 +258,239 @@ const formatBytes = (bytes: number): string => {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
 }
-
-const formatUptime = (seconds: number): string => {
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  
-  if (days > 0) {
-    return `${days}天 ${hours}小时 ${minutes}分钟`
-  } else if (hours > 0) {
-    return `${hours}小时 ${minutes}分钟`
-  } else {
-    return `${minutes}分钟`
-  }
-}
 </script>
 
 <style scoped>
 .system-status {
-  margin-bottom: 1.25rem;
+  position: relative;
 }
 
-.status-grid {
+.gauge-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
 }
 
-.status-card {
-  background: var(--card-bg);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s;
-  border: 1px solid var(--border-color);
+.gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  padding: 0.5rem;
 }
 
-.status-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.card-header {
+.gauge-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
-.card-header .icon {
-  font-size: 1.1rem;
+.gauge-header .icon {
+  font-size: 1rem;
   color: var(--primary-dark);
 }
 
-.card-header .title {
+.gauge-header .title {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.card-content {
+.tooltip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% + 2rem);
+  min-width: 280px;
+  max-width: 400px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.tooltip:not(.tooltip-bottom) {
+  bottom: calc(100% + 10px);
+}
+
+.tooltip:not(.tooltip-bottom)::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top-color: var(--card-bg);
+}
+
+.tooltip:not(.tooltip-bottom)::before {
+  content: '';
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top-color: var(--border-color);
+  z-index: -1;
+}
+
+.tooltip.tooltip-bottom {
+  top: calc(100% + 10px);
+}
+
+.tooltip.tooltip-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-bottom-color: var(--card-bg);
+}
+
+.tooltip.tooltip-bottom::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-bottom-color: var(--border-color);
+  z-index: -1;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
   margin-bottom: 0.75rem;
-}
-
-.value {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tooltip-header .el-icon {
   color: var(--primary-dark);
-  margin-bottom: 0.25rem;
-  letter-spacing: -0.5px;
 }
 
-.label {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
-}
-
-.details {
+.tooltip-content {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.75rem;
 }
 
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-}
-
-.detail-label {
-  color: var(--text-secondary);
-}
-
-.detail-value {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.progress-bar {
-  height: 4px;
-  background: var(--border-color);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
-  transition: width 0.3s ease;
-}
-
-.load-values {
+.tooltip-section {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.load-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.load-label {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.load-value {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--primary-dark);
-}
-
-.uptime-value {
-  font-size: 1.1rem;
+.section-title {
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--primary-dark);
   margin-bottom: 0.25rem;
 }
 
-.uptime-label {
-  font-size: 0.75rem;
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.info-label {
   color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.info-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cpu-columns,
+.disk-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.disk-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.disk-section:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.no-data {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding: 1rem;
+}
+
+@media (max-width: 1024px) {
+  .gauge-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .tooltip {
+    width: calc(100% + 1.5rem);
+    min-width: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .gauge-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .tooltip {
+    position: fixed;
+    bottom: auto;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .tooltip::after,
+  .tooltip::before {
+    display: none;
+  }
+
+  .cpu-columns,
+  .disk-columns {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
 }
 </style>
