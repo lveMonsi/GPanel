@@ -106,6 +106,19 @@ if %ERRORLEVEL% NEQ 0 (
 )
 echo Windows amd64 build completed
 
+echo Building Windows gpctl...
+cd "%BASE_PATH%\tools"
+set CGO_ENABLED=0
+set GOOS=windows
+set GOARCH=amd64
+go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\windows-amd64\gpctl.exe" gpctl.go
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Windows gpctl build failed
+    pause
+    exit /b 1
+)
+echo Windows gpctl build completed
+
 echo Building Linux amd64 version...
 cd "%CORE_PATH%"
 set CGO_ENABLED=0
@@ -118,6 +131,19 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 echo Linux amd64 build completed
+
+echo Building Linux gpctl...
+cd "%BASE_PATH%\tools"
+set CGO_ENABLED=0
+set GOOS=linux
+set GOARCH=amd64
+go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\linux-amd64\gpctl" gpctl.go
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Linux gpctl build failed
+    pause
+    exit /b 1
+)
+echo Linux gpctl build completed
 
 echo.
 echo ========================================

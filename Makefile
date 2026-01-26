@@ -15,10 +15,11 @@ CORE_PATH=$(BASE_PATH)/core
 WEB_DIST_PATH=$(CORE_PATH)/web/dist
 CORE_MAIN=$(CORE_PATH)/main.go
 CORE_NAME=gpanel
+CTL_NAME=gpctl
 
 LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT) -s -w"
 
-.PHONY: clean build build_frontend build_core build_linux install deploy help
+.PHONY: clean build build_frontend build_core build_core_linux build_gpctl build_gpctl_linux install deploy help
 
 help:
 	@echo "GPanel 构建和管理命令"
@@ -29,6 +30,8 @@ help:
 	@echo "  make build_frontend  - 仅构建前端"
 	@echo "  make build_core      - 仅构建后端（当前平台）"
 	@echo "  make build_core_linux- 仅构建后端（Linux 平台）"
+	@echo "  make build_gpctl     - 仅构建 gpctl 工具（当前平台）"
+	@echo "  make build_gpctl_linux- 仅构建 gpctl 工具（Linux 平台）"
 	@echo "  make clean           - 清理构建产物"
 	@echo "  make install         - 安装到系统（需要 root 权限）"
 	@echo "  make deploy          - 快速部署到 /opt/gpanel"
@@ -65,11 +68,23 @@ build_core_linux:
 	&& CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CORE_NAME) $(CORE_MAIN)
 	@echo "后端构建完成"
 
-build: clean build_frontend build_core
-	@echo "构建完成！二进制文件位于: $(BUILD_PATH)/$(CORE_NAME)"
+build_gpctl:
+	@echo "构建 gpctl ($(GOOS)/$(GOARCH))..."
+	cd $(BASE_PATH)/tools \
+	&& CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CTL_NAME) gpctl.go
+	@echo "gpctl 构建完成"
 
-build_linux: clean build_frontend build_core_linux
-	@echo "Linux 构建完成！二进制文件位于: $(BUILD_PATH)/$(CORE_NAME)"
+build_gpctl_linux:
+	@echo "构建 gpctl (linux/amd64)..."
+	cd $(BASE_PATH)/tools \
+	&& CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CTL_NAME) gpctl.go
+	@echo "gpctl 构建完成"
+
+build: clean build_frontend build_core build_gpctl
+	@echo "构建完成！二进制文件位于: $(BUILD_PATH)/"
+
+build_linux: clean build_frontend build_core_linux build_gpctl_linux
+	@echo "Linux 构建完成！二进制文件位于: $(BUILD_PATH)/"
 
 install:
 	@echo "安装 GPanel 到系统..."
@@ -81,6 +96,8 @@ install:
 	mkdir -p /var/log/gpanel
 	cp $(BUILD_PATH)/$(CORE_NAME) /opt/gpanel/
 	chmod +x /opt/gpanel/$(CORE_NAME)
+	cp $(BUILD_PATH)/$(CTL_NAME) /usr/local/bin/
+	chmod +x /usr/local/bin/$(CTL_NAME)
 	cp config.yaml /opt/gpanel/ 2>/dev/null || echo "警告: config.yaml 不存在，将使用默认配置"
 	cp gpanel.service /etc/systemd/system/
 	systemctl daemon-reload
@@ -88,6 +105,12 @@ install:
 	@echo "使用以下命令启动服务:"
 	@echo "  sudo systemctl enable gpanel"
 	@echo "  sudo systemctl start gpanel"
+	@echo ""
+	@echo "使用 gpctl 管理服务:"
+	@echo "  gpctl status    - 查看服务状态"
+	@echo "  gpctl start     - 启动服务"
+	@echo "  gpctl stop      - 停止服务"
+	@echo "  gpctl restart   - 重启服务"
 
 deploy: build_linux
 	@echo "部署 GPanel 到 /opt/gpanel..."
@@ -99,6 +122,8 @@ deploy: build_linux
 	mkdir -p /var/log/gpanel
 	cp $(BUILD_PATH)/$(CORE_NAME) /opt/gpanel/
 	chmod +x /opt/gpanel/$(CORE_NAME)
+	cp $(BUILD_PATH)/$(CTL_NAME) /usr/local/bin/
+	chmod +x /usr/local/bin/$(CTL_NAME)
 	cp config.yaml /opt/gpanel/ 2>/dev/null || true
 	cp gpanel.service /etc/systemd/system/
 	systemctl daemon-reload
@@ -106,3 +131,9 @@ deploy: build_linux
 	@echo "部署完成！"
 	@echo "使用以下命令启动服务:"
 	@echo "  sudo systemctl start gpanel"
+	@echo ""
+	@echo "使用 gpctl 管理服务:"
+	@echo "  gpctl status    - 查看服务状态"
+	@echo "  gpctl start     - 启动服务"
+	@echo "  gpctl stop      - 停止服务"
+	@echo "  gpctl restart   - 重启服务"
