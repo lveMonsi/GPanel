@@ -303,8 +303,8 @@ const formatBytes = (bytes: number): string => {
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% + 2rem);
-  min-width: 280px;
-  max-width: 400px;
+  min-width: 220px;
+  max-width: 280px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -460,7 +460,7 @@ const formatBytes = (bytes: number): string => {
 
   .tooltip {
     width: calc(100% + 1.5rem);
-    min-width: 260px;
+    min-width: 200px;
   }
 }
 
