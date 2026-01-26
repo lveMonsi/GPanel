@@ -2,94 +2,100 @@
   <div class="dashboard">
     <main class="content">
       <div class="card-grid">
-        <!-- 左上：告警通知卡片 -->
-        <div class="card alert-card">
-          <div class="card-header">
-            <el-icon class="card-icon"><Bell /></el-icon>
-            <span class="card-title">告警通知</span>
-            <span class="alert-count">{{ alerts.length }}</span>
+        <!-- 左侧列：告警通知 + 系统监控 -->
+        <div class="card-grid-left">
+          <!-- 告警通知卡片 -->
+          <div class="card alert-card">
+            <div class="card-header">
+              <el-icon class="card-icon"><Bell /></el-icon>
+              <span class="card-title">告警通知</span>
+              <span class="alert-count">{{ alerts.length }}</span>
+            </div>
+            <div class="card-body">
+              <div class="alert-items">
+                <div
+                  v-for="alert in alerts"
+                  :key="alert.id"
+                  :class="['alert-item', `alert-${alert.level}`]"
+                  @click="showAlertDetail(alert)"
+                >
+                  <div class="alert-item-icon">
+                    <el-icon>
+                      <component :is="getAlertIcon(alert.level)" />
+                    </el-icon>
+                  </div>
+                  <div class="alert-item-content">
+                    <div class="alert-item-title">{{ alert.title }}</div>
+                    <div class="alert-item-time">{{ formatAlertTime(alert.time) }}</div>
+                  </div>
+                </div>
+                <div v-if="alerts.length === 0" class="alert-empty">
+                  <el-icon><Check /></el-icon>
+                  <span>暂无告警</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="card-body">
-            <div class="alert-items">
-              <div
-                v-for="alert in alerts"
-                :key="alert.id"
-                :class="['alert-item', `alert-${alert.level}`]"
-                @click="showAlertDetail(alert)"
-              >
-                <div class="alert-item-icon">
-                  <el-icon>
-                    <component :is="getAlertIcon(alert.level)" />
-                  </el-icon>
-                </div>
-                <div class="alert-item-content">
-                  <div class="alert-item-title">{{ alert.title }}</div>
-                  <div class="alert-item-time">{{ formatAlertTime(alert.time) }}</div>
-                </div>
-              </div>
-              <div v-if="alerts.length === 0" class="alert-empty">
-                <el-icon><Check /></el-icon>
-                <span>暂无告警</span>
-              </div>
+
+          <!-- 系统监控卡片 -->
+          <div class="card gauges-card">
+            <div class="card-header">
+              <el-icon class="card-icon"><TrendCharts /></el-icon>
+              <span class="card-title">系统监控</span>
+            </div>
+            <div class="card-body">
+              <SystemStatus
+                v-if="currentInfo"
+                :cpu-info="currentInfo.cpuInfo"
+                :memory-info="currentInfo.memoryInfo"
+                :load-info="currentInfo.loadInfo"
+                :disk-info="currentInfo.diskInfo"
+              />
             </div>
           </div>
         </div>
 
-        <!-- 右上：系统信息卡片 -->
-        <div class="card system-card">
-          <div class="card-header">
-            <el-icon class="card-icon"><Monitor /></el-icon>
-            <span class="card-title">系统信息</span>
-          </div>
-          <div class="card-body">
-            <div v-if="systemInfo" class="system-details">
-              <div class="detail-row">
-                <span class="detail-label">主机名</span>
-                <span class="detail-value">{{ systemInfo.hostname }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">系统</span>
-                <span class="detail-value">{{ systemInfo.platform }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">内核</span>
-                <span class="detail-value">{{ systemInfo.kernelVersion }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">架构</span>
-                <span class="detail-value">{{ systemInfo.kernelArch }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">地址</span>
-                <span class="detail-value">{{ systemInfo.hostAddress || '未知' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">启动</span>
-                <span class="detail-value">{{ formatBootTime(systemInfo.bootTime) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">运行</span>
-                <span class="detail-value">{{ formatUptime(systemInfo.uptime) }}</span>
-              </div>
+        <!-- 右侧列：系统信息 -->
+        <div class="card-grid-right">
+          <!-- 系统信息卡片 -->
+          <div class="card system-card">
+            <div class="card-header">
+              <el-icon class="card-icon"><Monitor /></el-icon>
+              <span class="card-title">系统信息</span>
             </div>
-            <div v-else class="loading">加载中...</div>
-          </div>
-        </div>
-
-        <!-- 左下：仪表盘卡片 -->
-        <div class="card gauges-card">
-          <div class="card-header">
-            <el-icon class="card-icon"><TrendCharts /></el-icon>
-            <span class="card-title">系统监控</span>
-          </div>
-          <div class="card-body">
-            <SystemStatus
-              v-if="currentInfo"
-              :cpu-info="currentInfo.cpuInfo"
-              :memory-info="currentInfo.memoryInfo"
-              :load-info="currentInfo.loadInfo"
-              :disk-info="currentInfo.diskInfo"
-            />
+            <div class="card-body">
+              <div v-if="systemInfo" class="system-details">
+                <div class="detail-row">
+                  <span class="detail-label">主机名</span>
+                  <span class="detail-value">{{ systemInfo.hostname }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">系统</span>
+                  <span class="detail-value">{{ systemInfo.platform }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">内核</span>
+                  <span class="detail-value">{{ systemInfo.kernelVersion }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">架构</span>
+                  <span class="detail-value">{{ systemInfo.kernelArch }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">地址</span>
+                  <span class="detail-value">{{ systemInfo.hostAddress || '未知' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">启动</span>
+                  <span class="detail-value">{{ formatBootTime(systemInfo.bootTime) }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">运行</span>
+                  <span class="detail-value">{{ formatUptime(systemInfo.uptime) }}</span>
+                </div>
+              </div>
+              <div v-else class="loading">加载中...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -374,11 +380,22 @@ onUnmounted(() => {
 }
 
 .card-grid {
-  display: grid;
-  grid-template-columns: 7fr 3fr;
+  display: flex;
   gap: 1rem;
   align-items: start;
-  grid-auto-rows: min-content;
+}
+
+.card-grid-left {
+  flex: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card-grid-right {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
 }
 
 .card {
@@ -612,7 +629,12 @@ onUnmounted(() => {
 
 @media (max-width: 1024px) {
   .card-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .card-grid-left,
+  .card-grid-right {
+    flex: 1;
   }
 }
 
