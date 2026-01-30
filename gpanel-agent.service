@@ -1,14 +1,13 @@
 [Unit]
-Description=GPanel Server Service
-After=network.target gpanel-agent.service
-Requires=gpanel-agent.service
+Description=GPanel Agent Service
+After=network.target
 
 [Service]
 Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/gpanel
-ExecStart=/opt/gpanel/gpanel
+ExecStart=/opt/gpanel/gpanel-agent
 Restart=on-failure
 RestartSec=5s
 

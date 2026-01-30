@@ -51,6 +51,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Files.vue')
       }
     ]
+  },
+  {
+    path: '/firewall',
+    name: 'Firewall',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'FirewallMain',
+        component: () => import('@/views/Firewall.vue')
+      }
+    ]
   }
 ]
 

@@ -2,130 +2,165 @@ package controllers
 
 import (
 	"gpanel/global"
-	"gpanel/service"
 	"gpanel/utils"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
+var (
+	Version   = "v0.1.2"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+)
+
+// HealthCheck 健康检查
 func HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
-		"message": "GPanel API is running",
+		"service": "gpanel",
 	})
 }
 
+// GetSystemInfo 获取系统信息
 func GetSystemInfo(c *gin.Context) {
-	systemInfo, err := utils.GetSystemInfo()
+	info, err := utils.GetSystemInfo()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get system info",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, systemInfo)
+	c.JSON(http.StatusOK, info)
 }
 
+// GetCurrentInfo 获取当前实时信息
 func GetCurrentInfo(c *gin.Context) {
 	cpuInfo, memInfo, diskInfo, loadInfo, networkInfo, err := utils.GetCurrentInfo()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get current info",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"cpuInfo":     cpuInfo,
-		"memoryInfo":  memInfo,
-		"diskInfo":    diskInfo,
-		"loadInfo":    loadInfo,
-		"networkInfo": networkInfo,
+		"cpu":     cpuInfo,
+		"memory":  memInfo,
+		"disk":    diskInfo,
+		"load":    loadInfo,
+		"network": networkInfo,
 	})
 }
 
-func GetConfig(c *gin.Context) {
-	if global.ConfigCacheInstance != nil {
-		config := global.ConfigCacheInstance.GetAll()
-		c.JSON(http.StatusOK, config)
-	} else {
-		settingService := service.NewSettingService()
-		settings, err := settingService.GetAllSettings()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to get config",
-			})
-			return
-		}
-
-		configMap := make(map[string]string)
-		for _, setting := range settings {
-			configMap[setting.Key] = setting.Value
-		}
-
-		c.JSON(http.StatusOK, configMap)
-	}
-}
-
-func UpdateConfig(c *gin.Context) {
-	var updates map[string]string
-	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid config format",
-		})
-		return
-	}
-
-	settingService := service.NewSettingService()
-	for key, value := range updates {
-		if err := settingService.UpdateSetting(key, value); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to update config: " + key,
-			})
-			return
-		}
-
-		// 更新缓存
-		if global.ConfigCacheInstance != nil {
-			global.ConfigCacheInstance.Set(key, value)
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Config updated successfully",
-	})
-}
-
-func CheckConfigInitialized(c *gin.Context) {
-	if global.ConfigCacheInstance != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"initialized": global.ConfigCacheInstance.IsInitialized(),
-		})
-	} else {
-		settingService := service.NewSettingService()
-		initialized, _ := settingService.GetSettingValueByKey("Initialized")
-		c.JSON(http.StatusOK, gin.H{
-			"initialized": initialized == "true",
-		})
-	}
-}
-
-func ReloadConfig(c *gin.Context) {
-	if err := global.ReloadConfig(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to reload config",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Config reloaded successfully",
-	})
-}
-
+// GetVersion 获取版本信息
 func GetVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"version": "v0.0.1",
+		"version": Version,
+		"build":   BuildTime,
+		"commit":  GitCommit,
 	})
+}
+
+// GetOSInfo 获取操作系统信息（用于前端检测）
+func GetOSInfo(c *gin.Context) {
+	info := utils.GetOSInfo()
+	c.JSON(http.StatusOK, gin.H{
+		"os":   info.OS,
+		"arch": info.Arch,
+	})
+}
+
+// GetConfig 获取配置
+func GetConfig(c *gin.Context) {
+	if global.ConfigCacheInstance == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Config not initialized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"server": gin.H{
+			"port":           global.ConfigCacheInstance.GetServerPort(),
+			"mode":           global.ConfigCacheInstance.GetServerMode(),
+			"sessionTimeout": global.ConfigCacheInstance.GetSessionTimeout(),
+		},
+		"security": gin.H{
+			"entrance": global.ConfigCacheInstance.GetSecurityEntrance(),
+		},
+		"panel": gin.H{
+			"user": global.ConfigCacheInstance.GetPanelUser(),
+		},
+		"system": gin.H{
+			"language": global.ConfigCacheInstance.GetLanguage(),
+			"timezone": global.ConfigCacheInstance.GetTimezone(),
+		},
+		"version": global.ConfigCacheInstance.GetVersion(),
+	})
+}
+
+// UpdateConfig 更新配置
+func UpdateConfig(c *gin.Context) {
+	var req struct {
+		ServerPort       string `json:"serverPort"`
+		ServerMode       string `json:"serverMode"`
+		SessionTimeout   int    `json:"sessionTimeout"`
+		SecurityEntrance string `json:"securityEntrance"`
+		Language         string `json:"language"`
+		Timezone         string `json:"timezone"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if global.ConfigCacheInstance == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Config not initialized"})
+		return
+	}
+
+	// 更新配置
+	if req.ServerPort != "" {
+		global.ConfigCacheInstance.UpdateSetting("ServerPort", req.ServerPort)
+	}
+	if req.ServerMode != "" {
+		global.ConfigCacheInstance.UpdateSetting("ServerMode", req.ServerMode)
+	}
+	if req.SessionTimeout > 0 {
+		global.ConfigCacheInstance.UpdateSetting("SessionTimeout", strconv.Itoa(req.SessionTimeout))
+	}
+	if req.SecurityEntrance != "" {
+		global.ConfigCacheInstance.UpdateSetting("SecurityEntrance", req.SecurityEntrance)
+	}
+	if req.Language != "" {
+		global.ConfigCacheInstance.UpdateSetting("Language", req.Language)
+	}
+	if req.Timezone != "" {
+		global.ConfigCacheInstance.UpdateSetting("Timezone", req.Timezone)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Configuration updated"})
+}
+
+// CheckConfigInitialized 检查配置是否已初始化
+func CheckConfigInitialized(c *gin.Context) {
+	if global.ConfigCacheInstance == nil {
+		c.JSON(http.StatusOK, gin.H{"initialized": false})
+		return
+	}
+
+	initialized := global.ConfigCacheInstance.IsInitialized()
+	c.JSON(http.StatusOK, gin.H{"initialized": initialized})
+}
+
+// ReloadConfig 重新加载配置
+func ReloadConfig(c *gin.Context) {
+	if global.ConfigReloaderInstance == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Config reloader not initialized"})
+		return
+	}
+
+	// 触发配置重载
+	if err := global.ConfigReloaderInstance.ReloadNow(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Configuration reloaded"})
 }

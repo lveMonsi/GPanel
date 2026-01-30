@@ -1,0 +1,12 @@
+# GPanel Agent 配置文件
+
+server:
+  mode: release  # debug, release, test
+  listen: 0.0.0.0:9998  # 监听地址（HTTP模式）
+
+log:
+  level: info  # debug, info, warn, error
+  file: /var/log/gpanel/agent.log
+
+data:
+  dir: /var/lib/gpanel  # 数据目录

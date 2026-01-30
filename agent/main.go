@@ -1,0 +1,54 @@
+package main
+
+import (
+	"gpanel/agent/global"
+	"gpanel/agent/middleware"
+	"gpanel/agent/routes"
+	"log"
+	"runtime"
+
+	"github.com/gin-gonic/gin"
+)
+
+var (
+	Version   = "v0.1.2"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+)
+
+func main() {
+	// 显示版本信息
+	log.Printf("GPanel Agent v%s (commit: %s, built: %s)", Version, GitCommit, BuildTime)
+	log.Printf("Go version: %s, OS/Arch: %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+
+	// 初始化配置
+	if err := global.InitConfig(); err != nil {
+		log.Fatalf("Failed to initialize config: %v", err)
+	}
+
+	// 初始化全局变量
+	global.InitGlobals()
+
+	// 初始化日志
+	global.InitLogger()
+
+	// 获取服务器配置
+	serverMode := global.GetServerMode()
+	gin.SetMode(serverMode)
+
+	r := gin.Default()
+
+	// 添加安全中间件
+	r.Use(middleware.Security())
+
+	// 注册所有路由
+	routes.SetupRouter(r)
+
+	// 获取监听地址
+	addr := global.GetListenAddr()
+	log.Printf("Starting GPanel Agent on %s", addr)
+
+	if err := r.Run(addr); err != nil {
+		log.Fatalf("Failed to start agent: %v", err)
+	}
+}

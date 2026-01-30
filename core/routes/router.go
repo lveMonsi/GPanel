@@ -20,7 +20,7 @@ var frontendFS embed.FS
 func SetupRouter(r *gin.Engine) {
 	// 启动 WebSocket 集线器
 	go utils.Hub.Run()
-	
+
 	// 启动进度清理任务
 	utils.StartCleanupTask()
 
@@ -98,6 +98,7 @@ func SetupRouter(r *gin.Engine) {
 			v1.GET("/system/info", middleware.Auth(), controllers.GetSystemInfo)
 			v1.GET("/system/current", middleware.Auth(), controllers.GetCurrentInfo)
 			v1.GET("/system/version", middleware.Auth(), controllers.GetVersion)
+			v1.GET("/system/os", middleware.Auth(), controllers.GetOSInfo)
 			v1.GET("/config", middleware.Auth(), controllers.GetConfig)
 			v1.POST("/config", middleware.Auth(), controllers.UpdateConfig)
 			v1.GET("/config/initialized", middleware.Auth(), controllers.CheckConfigInitialized)
@@ -141,9 +142,23 @@ func SetupRouter(r *gin.Engine) {
 				files.GET("/progress", middleware.Auth(), fileController.GetProgress)
 				files.POST("/preview", middleware.Auth(), fileController.PreviewFile)
 			}
-			
+
 			// WebSocket 连接
 			v1.GET("/ws", utils.HandleWebSocket)
+
+			// 防火墙 API（代理到 Agent）
+			firewallController, _ := controllers.NewFirewallController()
+			agent := v1.Group("/agent")
+			{
+				agent.POST("/firewall/base", middleware.Auth(), firewallController.LoadBaseInfo)
+				agent.POST("/firewall/search", middleware.Auth(), firewallController.SearchRules)
+				agent.POST("/firewall/operate", middleware.Auth(), firewallController.OperateFirewall)
+				agent.POST("/firewall/port", middleware.Auth(), firewallController.OperatePortRule)
+				agent.POST("/firewall/ip", middleware.Auth(), firewallController.OperateIPRule)
+				agent.POST("/firewall/update/port", middleware.Auth(), firewallController.UpdatePortRule)
+				agent.POST("/firewall/update/ip", middleware.Auth(), firewallController.UpdateIPRule)
+				agent.POST("/firewall/forward", middleware.Auth(), firewallController.OperateForwardRule)
+			}
 		}
 	}
 }

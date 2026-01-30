@@ -205,8 +205,16 @@ func getNetworkInfo() (models.NetworkInfo, error) {
 	}, nil
 }
 
-func GetOSInfo() string {
-	return runtime.GOOS
+type OSInfo struct {
+	OS   string
+	Arch string
+}
+
+func GetOSInfo() OSInfo {
+	return OSInfo{
+		OS:   runtime.GOOS,
+		Arch: runtime.GOARCH,
+	}
 }
 
 func GetArchInfo() string {
