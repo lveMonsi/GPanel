@@ -1,6 +1,7 @@
 package main
 
 import (
+	"gpanel/dto"
 	"gpanel/global"
 	"gpanel/middleware"
 	"gpanel/models"
@@ -26,6 +27,10 @@ func main() {
 	// 自动迁移数据库表
 	if err := global.DB.AutoMigrate(
 		&models.Setting{},
+		&models.HostGroup{},
+		&models.Host{},
+		&models.SessionHistory{},
+		&models.QuickCommand{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -34,6 +39,12 @@ func main() {
 	settingService := service.NewSettingService()
 	if err := settingService.InitializeDefaultSettings(); err != nil {
 		log.Printf("Warning: Failed to initialize default settings: %v", err)
+	}
+
+	// 初始化默认主机分组
+	hostService := service.NewHostService()
+	if err := initializeDefaultHostGroups(hostService); err != nil {
+		log.Printf("Warning: Failed to initialize default host groups: %v", err)
 	}
 
 	// 初始化配置缓存
@@ -79,4 +90,26 @@ func main() {
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+// initializeDefaultHostGroups 初始化默认主机分组
+func initializeDefaultHostGroups(hostService service.IHostService) error {
+	// 检查是否已存在默认分组
+	groups, _, err := hostService.ListGroups(dto.HostGroupSearch{
+		PageInfo: dto.PageInfo{Page: 1, PageSize: 10},
+	})
+	if err != nil {
+		return err
+	}
+
+	// 如果没有任何分组，创建默认分组
+	if len(groups) == 0 {
+		_, err := hostService.CreateGroup(dto.HostGroupOperate{
+			Name:        "默认分组",
+			Description: "系统默认创建的主机分组",
+		})
+		return err
+	}
+
+	return nil
 }

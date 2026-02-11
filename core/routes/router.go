@@ -114,6 +114,8 @@ func SetupRouter(r *gin.Engine) {
 				settings.POST("", middleware.Auth(), settingController.CreateSetting)
 				settings.PUT("", middleware.Auth(), settingController.UpdateSetting)
 				settings.DELETE("/:key", middleware.Auth(), settingController.DeleteSetting)
+				settings.GET("/terminal", middleware.Auth(), settingController.GetTerminalInfo)
+				settings.POST("/terminal", middleware.Auth(), settingController.UpdateTerminal)
 			}
 
 			// 配置热重载 API
@@ -165,6 +167,54 @@ func SetupRouter(r *gin.Engine) {
 				agent.POST("/firewall/update/port", middleware.Auth(), firewallController.UpdatePortRule)
 				agent.POST("/firewall/update/ip", middleware.Auth(), firewallController.UpdateIPRule)
 				agent.POST("/firewall/forward", middleware.Auth(), firewallController.OperateForwardRule)
+			}
+
+			// 主机管理 API
+			controllers.InitHostController()
+			hostGroups := v1.Group("/host-groups")
+			{
+				hostGroups.GET("", middleware.Auth(), controllers.ListGroups)
+				hostGroups.POST("", middleware.Auth(), controllers.CreateGroup)
+				hostGroups.GET("/:id", middleware.Auth(), controllers.GetGroupByID)
+				hostGroups.PUT("/:id", middleware.Auth(), controllers.UpdateGroup)
+				hostGroups.DELETE("/:id", middleware.Auth(), controllers.DeleteGroup)
+			}
+			hosts := v1.Group("/hosts")
+			{
+				hosts.GET("", middleware.Auth(), controllers.ListHosts)
+				hosts.POST("", middleware.Auth(), controllers.CreateHost)
+				hosts.GET("/tree", middleware.Auth(), controllers.GetHostTree)
+				hosts.POST("/test", middleware.Auth(), controllers.TestHostConnection)
+				hosts.POST("/move", middleware.Auth(), controllers.MoveHosts)
+				hosts.GET("/export", middleware.Auth(), controllers.ExportHosts)
+				hosts.POST("/import", middleware.Auth(), controllers.ImportHosts)
+				hosts.GET("/:id", middleware.Auth(), controllers.GetHostByID)
+				hosts.PUT("/:id", middleware.Auth(), controllers.UpdateHost)
+				hosts.DELETE("/:id", middleware.Auth(), controllers.DeleteHost)
+				hosts.GET("/:id/connection", middleware.Auth(), controllers.GetHostForTerminal)
+			}
+
+			// 会话历史 API
+			controllers.InitSessionHistoryController()
+			sessionHistories := v1.Group("/session-histories")
+			{
+				sessionHistories.GET("", middleware.Auth(), controllers.ListSessionHistories)
+				sessionHistories.POST("", middleware.Auth(), controllers.CreateSessionHistory)
+				sessionHistories.POST("/search", middleware.Auth(), controllers.SearchSessionHistories)
+				sessionHistories.GET("/:id", middleware.Auth(), controllers.GetSessionHistoryByID)
+				sessionHistories.PUT("", middleware.Auth(), controllers.UpdateSessionHistory)
+				sessionHistories.DELETE("/:id", middleware.Auth(), controllers.DeleteSessionHistory)
+			}
+
+			// 快速命令 API
+			quickCommandController := controllers.NewQuickCommandController()
+			quickCommands := v1.Group("/quick-commands")
+			{
+				quickCommands.POST("", middleware.Auth(), quickCommandController.Create)
+				quickCommands.POST("/update", middleware.Auth(), quickCommandController.Update)
+				quickCommands.POST("/delete", middleware.Auth(), quickCommandController.Delete)
+				quickCommands.POST("/search", middleware.Auth(), quickCommandController.Search)
+				quickCommands.GET("/all", middleware.Auth(), quickCommandController.GetAll)
 			}
 		}
 	}

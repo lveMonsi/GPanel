@@ -3,7 +3,9 @@ package service
 import (
 	"crypto/rand"
 	"math/big"
+	"time"
 
+	"gpanel/dto"
 	"gpanel/models"
 	"gpanel/repo"
 )
@@ -18,6 +20,8 @@ type ISettingService interface {
 	CreateSetting(key, value, about string) error
 	DeleteSetting(key string) error
 	InitializeDefaultSettings() error
+	GetTerminalInfo() (*dto.TerminalInfo, error)
+	UpdateTerminal(req dto.TerminalUpdate) error
 }
 
 func NewSettingService() ISettingService {
@@ -42,13 +46,18 @@ func (s *SettingService) UpdateSetting(key, value string) error {
 	oldSetting, err := settingRepo.GetByKey(key)
 	if err != nil {
 		// 如果设置不存在，则创建它
-		_ = settingRepo.Create(key, value, "")
+		if err := settingRepo.Create(key, value, ""); err != nil {
+			return err
+		}
 		return nil
 	}
 	if oldSetting.Value == value {
 		return nil
 	}
-	return settingRepo.Update(key, value)
+	if err := settingRepo.Update(key, value); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *SettingService) CreateSetting(key, value, about string) error {
@@ -105,8 +114,64 @@ func generateRandomEntrance() string {
 
 	b := make([]byte, length)
 	for i := range b {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// 如果随机数生成失败，返回一个默认的安全入口
+			return "/secure" + time.Now().Format("20060102150405")
+		}
 		b[i] = charset[n.Int64()]
 	}
 	return "/" + string(b)
+}
+
+// GetTerminalInfo 获取终端设置
+func (s *SettingService) GetTerminalInfo() (*dto.TerminalInfo, error) {
+	settings, err := settingRepo.List()
+	if err != nil {
+		return nil, err
+	}
+
+	settingsMap := make(map[string]string)
+	for _, s := range settings {
+		settingsMap[s.Key] = s.Value
+	}
+
+	return &dto.TerminalInfo{
+		LineHeight:        getSettingValue(settingsMap, "terminal_line_height", "1.2"),
+		LetterSpacing:     getSettingValue(settingsMap, "terminal_letter_spacing", "1.2"),
+		FontSize:          getSettingValue(settingsMap, "terminal_font_size", "14"),
+		CursorBlink:       getSettingValue(settingsMap, "terminal_cursor_blink", "enable"),
+		CursorStyle:       getSettingValue(settingsMap, "terminal_cursor_style", "underline"),
+		Scrollback:        getSettingValue(settingsMap, "terminal_scrollback", "1000"),
+		ScrollSensitivity: getSettingValue(settingsMap, "terminal_scroll_sensitivity", "10"),
+	}, nil
+}
+
+// UpdateTerminal 更新终端设置
+func (s *SettingService) UpdateTerminal(req dto.TerminalUpdate) error {
+	settings := []models.Setting{
+		{Key: "terminal_line_height", Value: req.LineHeight},
+		{Key: "terminal_letter_spacing", Value: req.LetterSpacing},
+		{Key: "terminal_font_size", Value: req.FontSize},
+		{Key: "terminal_cursor_blink", Value: req.CursorBlink},
+		{Key: "terminal_cursor_style", Value: req.CursorStyle},
+		{Key: "terminal_scrollback", Value: req.Scrollback},
+		{Key: "terminal_scroll_sensitivity", Value: req.ScrollSensitivity},
+	}
+
+	for _, setting := range settings {
+		if err := s.UpdateSetting(setting.Key, setting.Value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// getSettingValue 获取设置值，如果不存在则返回默认值
+func getSettingValue(settings map[string]string, key, defaultValue string) string {
+	if val, ok := settings[key]; ok && val != "" {
+		return val
+	}
+	return defaultValue
 }

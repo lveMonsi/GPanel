@@ -11,6 +11,8 @@ export interface SSHConfig {
   port: number;
   user: string;
   password: string;
+  authMode: 'password' | 'key';
+  key?: string;
 }
 
 export interface WsMsg {

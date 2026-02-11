@@ -18,13 +18,25 @@ interface Props {
   rows?: number;
   fontSize?: number;
   theme?: 'light' | 'dark';
+  lineHeight?: string;
+  letterSpacing?: string;
+  cursorBlink?: string;
+  cursorStyle?: string;
+  scrollback?: string;
+  scrollSensitivity?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   cols: 80,
   rows: 24,
   fontSize: 14,
-  theme: 'dark'
+  theme: 'dark',
+  lineHeight: '1.2',
+  letterSpacing: '1.2',
+  cursorBlink: 'enable',
+  cursorStyle: 'underline',
+  scrollback: '1000',
+  scrollSensitivity: '10'
 });
 
 const emit = defineEmits<{
@@ -73,6 +85,50 @@ watch(() => props.fontSize, (newFontSize) => {
   }
 });
 
+// 监听行高变化
+watch(() => props.lineHeight, (newLineHeight) => {
+  if (term.value) {
+    term.value.options.lineHeight = parseFloat(newLineHeight);
+    changeTerminalSize();
+  }
+});
+
+// 监听字间距变化
+watch(() => props.letterSpacing, (newLetterSpacing) => {
+  if (term.value) {
+    term.value.options.letterSpacing = parseFloat(newLetterSpacing);
+    changeTerminalSize();
+  }
+});
+
+// 监听光标闪烁变化
+watch(() => props.cursorBlink, (newCursorBlink) => {
+  if (term.value) {
+    term.value.options.cursorBlink = newCursorBlink === 'enable';
+  }
+});
+
+// 监听光标样式变化
+watch(() => props.cursorStyle, (newCursorStyle) => {
+  if (term.value) {
+    term.value.options.cursorStyle = newCursorStyle as any;
+  }
+});
+
+// 监听滚动行数变化
+watch(() => props.scrollback, (newScrollback) => {
+  if (term.value) {
+    term.value.options.scrollback = parseInt(newScrollback);
+  }
+});
+
+// 监听滚动灵敏度变化
+watch(() => props.scrollSensitivity, (newScrollSensitivity) => {
+  if (term.value) {
+    term.value.options.scrollSensitivity = parseInt(newScrollSensitivity);
+  }
+});
+
 const readyWatcher = watch(
   () => webSocketReady.value && termReady.value,
   (ready) => {
@@ -88,7 +144,7 @@ const newTerm = () => {
   const foreground = props.theme === 'dark' ? '#ffffff' : '#000000';
 
   term.value = new Terminal({
-    lineHeight: 1.2,
+    lineHeight: parseFloat(props.lineHeight),
     fontSize: props.fontSize,
     fontFamily: "Monaco, Menlo, Consolas, 'Courier New', monospace",
     theme: {
@@ -113,10 +169,10 @@ const newTerm = () => {
       brightCyan: '#29b8db',
       brightWhite: '#ffffff'
     },
-    cursorBlink: true,
-    cursorStyle: 'block',
-    scrollback: 1000,
-    scrollSensitivity: 15
+    cursorBlink: props.cursorBlink === 'enable',
+    cursorStyle: props.cursorStyle as any,
+    scrollback: parseInt(props.scrollback),
+    scrollSensitivity: parseInt(props.scrollSensitivity)
   });
 };
 

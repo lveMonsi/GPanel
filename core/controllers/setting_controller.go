@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"gpanel/dto"
 	"gpanel/global"
 	"gpanel/service"
 	"net/http"
@@ -172,5 +173,42 @@ func (sc *SettingController) UpdateSystemSettings(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "System settings updated successfully",
+	})
+}
+
+// GetTerminalInfo 获取终端设置
+// GET /api/v1/settings/terminal
+func (sc *SettingController) GetTerminalInfo(c *gin.Context) {
+	info, err := sc.settingService.GetTerminalInfo()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get terminal settings",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, info)
+}
+
+// UpdateTerminal 更新终端设置
+// POST /api/v1/settings/terminal
+func (sc *SettingController) UpdateTerminal(c *gin.Context) {
+	var req dto.TerminalUpdate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	if err := sc.settingService.UpdateTerminal(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to update terminal settings",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Terminal settings updated successfully",
 	})
 }

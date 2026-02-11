@@ -66,6 +66,19 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/hosts',
+    name: 'Hosts',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'HostsMain',
+        component: () => import('@/views/Hosts.vue')
+      }
+    ]
+  },
+  {
     path: '/terminal',
     name: 'Terminal',
     component: Layout,

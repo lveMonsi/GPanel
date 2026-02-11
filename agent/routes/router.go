@@ -43,6 +43,22 @@ func SetupRouter(r *gin.Engine) {
 				terminal.GET("/local", terminalController.TerminalLocal)
 				terminal.GET("/ssh", terminalController.TerminalSSH)
 			}
+
+			// 主机路由
+			hostController, _ := controllers.NewHostController()
+			hosts := v1.Group("/hosts")
+			{
+				hosts.POST("/test", hostController.TestConnection)
+			}
+
+			// 设置路由
+			settingController, _ := controllers.NewSettingController()
+			settings := v1.Group("/settings")
+			{
+				settings.POST("/ssh", settingController.SaveLocalConn)
+				settings.GET("/ssh/conn", settingController.GetLocalConn)
+				settings.POST("/ssh/check", settingController.TestLocalConn)
+			}
 		}
 	}
 }
