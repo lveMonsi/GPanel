@@ -35,6 +35,14 @@ func SetupRouter(r *gin.Engine) {
 				firewall.POST("/update/ip", firewallController.UpdateIPRule)
 				firewall.POST("/forward", firewallController.OperateForwardRule)
 			}
+
+			// 终端路由
+			terminalController, _ := controllers.NewTerminalController()
+			terminal := v1.Group("/terminal")
+			{
+				terminal.GET("/local", terminalController.TerminalLocal)
+				terminal.GET("/ssh", terminalController.TerminalSSH)
+			}
 		}
 	}
 }

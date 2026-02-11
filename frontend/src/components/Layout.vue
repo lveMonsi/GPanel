@@ -18,6 +18,10 @@
           <el-icon class="nav-icon"><Lock /></el-icon>
           <span class="nav-text">防火墙</span>
         </router-link>
+        <router-link to="/terminal" class="nav-item" active-class="active">
+          <el-icon class="nav-icon"><Monitor /></el-icon>
+          <span class="nav-text">终端</span>
+        </router-link>
         <router-link to="/settings" class="nav-item" active-class="active">
           <el-icon class="nav-icon"><Setting /></el-icon>
           <span class="nav-text">面板设置</span>
@@ -36,7 +40,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { DataBoard, Setting, SwitchButton, Folder, Lock } from '@element-plus/icons-vue'
+import { DataBoard, Setting, SwitchButton, Folder, Lock, Monitor } from '@element-plus/icons-vue'
 
 const router = useRouter()
 

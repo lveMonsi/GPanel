@@ -64,6 +64,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Firewall.vue')
       }
     ]
+  },
+  {
+    path: '/terminal',
+    name: 'Terminal',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'TerminalMain',
+        component: () => import('@/views/Terminal.vue')
+      }
+    ]
   }
 ]
 
