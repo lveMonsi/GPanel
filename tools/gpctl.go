@@ -61,7 +61,6 @@ func printUsage() {
 	fmt.Println("  restart             重启 GPanel 服务")
 	fmt.Println("  uninstall           卸载 GPanel 服务")
 	fmt.Println("  user-info           获取 GPanel 用户信息")
-	fmt.Println("  version             显示版本信息")
 	fmt.Println("  --help, -h          显示帮助信息")
 }
 

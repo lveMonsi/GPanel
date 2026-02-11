@@ -9,9 +9,6 @@ echo.
 
 @REM set VERSION=dev
 set VERSION=release
-for /f "delims=" %%i in ('git rev-parse --short HEAD 2^>nul') do set GIT_COMMIT=%%i
-if "%GIT_COMMIT%"=="" set GIT_COMMIT=unknown
-
 set BASE_PATH=%~dp0
 set BUILD_PATH=%BASE_PATH%build
 set WEB_PATH=%BASE_PATH%frontend
@@ -93,7 +90,7 @@ cd "%CORE_PATH%"
 set CGO_ENABLED=0
 set GOOS=windows
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\windows-amd64\%CORE_NAME%.exe" main.go frontend.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\windows-amd64\%CORE_NAME%.exe" main.go frontend.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Windows amd64 Core build failed
     pause
@@ -106,7 +103,7 @@ cd "%BASE_PATH%\tools"
 set CGO_ENABLED=0
 set GOOS=windows
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\windows-amd64\gpctl.exe" gpctl.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\windows-amd64\gpctl.exe" gpctl.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Windows gpctl build failed
     pause
@@ -119,7 +116,7 @@ cd "%CORE_PATH%"
 set CGO_ENABLED=0
 set GOOS=linux
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\linux-amd64\%CORE_NAME%" main.go frontend.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\linux-amd64\%CORE_NAME%" main.go frontend.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Linux amd64 Core build failed
     pause
@@ -132,7 +129,7 @@ cd "%BASE_PATH%\tools"
 set CGO_ENABLED=0
 set GOOS=linux
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\linux-amd64\gpctl" gpctl.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\linux-amd64\gpctl" gpctl.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Linux gpctl build failed
     pause
@@ -157,7 +154,7 @@ cd "%AGENT_PATH%"
 set CGO_ENABLED=0
 set GOOS=windows
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\windows-amd64\%AGENT_NAME%.exe" main.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\windows-amd64\%AGENT_NAME%.exe" main.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Windows amd64 Agent build failed
     pause
@@ -170,7 +167,7 @@ cd "%AGENT_PATH%"
 set CGO_ENABLED=0
 set GOOS=linux
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w -X main.Version=%VERSION% -X main.GitCommit=%GIT_COMMIT%" -o "%BUILD_PATH%\linux-amd64\%AGENT_NAME%" main.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\linux-amd64\%AGENT_NAME%" main.go
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Linux amd64 Agent build failed
     pause
@@ -190,10 +187,6 @@ echo   - gpctl.exe             ^(Windows gpctl^)
 echo   - %CORE_NAME%           ^(Linux Core^)
 echo   - %AGENT_NAME%          ^(Linux Agent^)
 echo   - gpctl                 ^(Linux gpctl^)
-echo.
-echo Version info:
-echo   - Version: %VERSION%
-echo   - Commit: %GIT_COMMIT%
 echo.
 echo Usage:
 echo   1. Start Agent: %AGENT_NAME%

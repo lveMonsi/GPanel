@@ -4,10 +4,6 @@ GOCLEAN=$(GOCMD) clean
 GOARCH=$(shell go env GOARCH)
 GOOS=$(shell go env GOOS)
 
-VERSION ?= dev
-BUILD_TIME=$(shell date +%Y-%m-%dT%H:%M:%S)
-GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-
 BASE_PATH := $(shell pwd)
 BUILD_PATH = $(BASE_PATH)/build
 WEB_PATH=$(BASE_PATH)/frontend
@@ -20,7 +16,7 @@ CORE_NAME=gpanel
 AGENT_NAME=gpanel-agent
 CTL_NAME=gpctl
 
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT) -s -w"
+LDFLAGS=-ldflags "-s -w"
 
 .PHONY: clean build build_linux build_frontend build_core build_core_linux build_agent build_agent_linux build_gpctl build_gpctl_linux install deploy help
 
@@ -41,9 +37,6 @@ help:
 	@echo "  make install         - 安装到系统（需要 root 权限）"
 	@echo "  make deploy          - 快速部署到 /opt/gpanel"
 	@echo "  make help            - 显示此帮助信息"
-	@echo ""
-	@echo "环境变量:"
-	@echo "  VERSION              - 版本号（默认: dev）"
 
 clean:
 	@echo "清理构建产物..."

@@ -9,12 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var (
-	Version   = "v0.1.2"
-	BuildTime = "unknown"
-	GitCommit = "unknown"
-)
-
 // HealthCheck 健康检查
 func HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
@@ -46,15 +40,6 @@ func GetCurrentInfo(c *gin.Context) {
 		"disk":    diskInfo,
 		"load":    loadInfo,
 		"network": networkInfo,
-	})
-}
-
-// GetVersion 获取版本信息
-func GetVersion(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"version": Version,
-		"build":   BuildTime,
-		"commit":  GitCommit,
 	})
 }
 

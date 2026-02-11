@@ -10,15 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var (
-	Version   = "v0.1.2"
-	BuildTime = "unknown"
-	GitCommit = "unknown"
-)
-
 func main() {
-	// 显示版本信息
-	log.Printf("GPanel Agent v%s (commit: %s, built: %s)", Version, GitCommit, BuildTime)
+	// 显示启动信息
+	log.Printf("GPanel Agent starting...")
 	log.Printf("Go version: %s, OS/Arch: %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 	// 初始化配置

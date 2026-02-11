@@ -201,8 +201,8 @@
               <h2>关于</h2>
               <div class="about-content">
                 <div class="about-item">
-                  <div class="about-label">版本</div>
-                  <div class="about-value">{{ versionInfo.version || '加载中...' }}</div>
+                  <div class="about-label">GPanel</div>
+                  <div class="about-value">服务器管理面板</div>
                 </div>
               </div>
             </div>
@@ -232,10 +232,6 @@ interface Config {
   passwordComplexityCheck: boolean
 }
 
-interface VersionInfo {
-  version: string
-}
-
 const router = useRouter()
 const loading = ref(false)
 const modalVisible = ref(false)
@@ -258,11 +254,6 @@ const tabs = [
   { key: 'security', label: '安全' },
   { key: 'about', label: '关于' }
 ]
-
-// 版本信息
-const versionInfo = ref<VersionInfo>({
-  version: ''
-})
 
 const config = reactive<Config>({
   panelUser: 'admin',
@@ -294,15 +285,6 @@ const fetchConfig = async () => {
     configChanged.value = false
   } catch (error) {
     console.error('获取配置失败:', error)
-  }
-}
-
-const fetchVersion = async () => {
-  try {
-    const response = await axios.get('/api/v1/system/version')
-    versionInfo.value = response.data
-  } catch (error) {
-    console.error('获取版本信息失败:', error)
   }
 }
 
@@ -384,7 +366,6 @@ const handleSave = async () => {
 
 onMounted(() => {
   fetchConfig()
-  fetchVersion()
 })
 
 watch(() => config, () => {
