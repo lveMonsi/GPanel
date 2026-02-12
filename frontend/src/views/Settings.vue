@@ -268,9 +268,11 @@ const config = reactive<Config>({
 
 const fetchConfig = async () => {
   try {
-    const response = await axios.get('/api/v1/config')
-    const data = response.data
+    // 使用 /api/v1/settings/system 接口获取设置
+    const response = await axios.get('/api/v1/settings/system')
+    const data = response.data.settings || {}
 
+    // 后端返回的是扁平的键值对格式
     config.panelUser = data.PanelUser || 'admin'
     config.panelPassword = data.PanelPassword || 'admin123'
     config.sessionTimeout = parseInt(data.SessionTimeout) || 86400
@@ -278,7 +280,7 @@ const fetchConfig = async () => {
     config.serverPort = data.ServerPort || '8080'
     config.listenAddress = data.ListenAddress || '0.0.0.0'
     config.securityEntrance = data.SecurityEntrance || '/'
-    config.passwordComplexityCheck = data.PasswordComplexityCheck === 'true'
+    config.passwordComplexityCheck = data.PasswordComplexityCheck === 'true' || data.PasswordComplexityCheck === true
 
     // 保存原始配置用于对比
     originalConfig.value = JSON.parse(JSON.stringify(config))
@@ -326,30 +328,33 @@ const handleSave = async () => {
   loading.value = true
   try {
     const isReset = (modalVisible as any).resetConfirm === true
-    const flatConfig: Record<string, string> = {
+    
+    // 构建设置数据，使用 /api/v1/settings/system 接口
+    const settingsData: Record<string, string> = {
+      ServerPort: config.serverPort,
+      SessionTimeout: String(config.sessionTimeout),  // 转换为字符串
+      SecurityEntrance: config.securityEntrance,
+      ListenAddress: config.listenAddress,
+      ServerAddress: config.serverAddress,
       PanelUser: config.panelUser,
       PanelPassword: config.panelPassword,
-      SessionTimeout: String(config.sessionTimeout),
-      ServerAddress: config.serverAddress,
-      ServerPort: config.serverPort,
-      ListenAddress: config.listenAddress,
-      SecurityEntrance: config.securityEntrance,
-      PasswordComplexityCheck: config.passwordComplexityCheck ? 'true' : 'false'
+      PasswordComplexityCheck: config.passwordComplexityCheck ? 'true' : 'false',
     }
 
     if (isReset) {
       const currentSecurityEntrance = config.securityEntrance
-      flatConfig.PanelUser = 'admin'
-      flatConfig.PanelPassword = 'admin123'
-      flatConfig.SessionTimeout = '86400'
-      flatConfig.ServerAddress = ''
-      flatConfig.ServerPort = '8080'
-      flatConfig.ListenAddress = '0.0.0.0'
-      flatConfig.SecurityEntrance = currentSecurityEntrance
-      flatConfig.PasswordComplexityCheck = 'false'
+      settingsData.ServerPort = '8080'
+      settingsData.SessionTimeout = '86400'
+      settingsData.ListenAddress = '0.0.0.0'
+      settingsData.ServerAddress = ''
+      settingsData.PanelUser = 'admin'
+      settingsData.PanelPassword = 'admin123'
+      settingsData.SecurityEntrance = currentSecurityEntrance
+      settingsData.PasswordComplexityCheck = 'false'
     }
 
-    await axios.post('/api/v1/config', flatConfig)
+    // 使用 /api/v1/settings/system 接口更新设置
+    await axios.post('/api/v1/settings/system', settingsData)
     await axios.post('/api/v1/server/restart')
     showModal('保存成功', '配置保存成功！\n\n系统将在2秒后自动重启以加载新配置...')
 

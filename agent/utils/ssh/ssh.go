@@ -44,7 +44,9 @@ func getKnownHostsFile() string {
 			homeDir = "/tmp"
 		}
 		gpanelDir := filepath.Join(homeDir, ".gpanel")
-		_ = os.MkdirAll(gpanelDir, 0700)
+		if err := os.MkdirAll(gpanelDir, 0700); err != nil {
+			fmt.Printf("[WARNING] Failed to create gpanel directory %s: %v\n", gpanelDir, err)
+		}
 		knownHostsFile = filepath.Join(gpanelDir, "known_hosts")
 	})
 	return knownHostsFile
@@ -119,7 +121,7 @@ func NewClient(c ConnInfo) (*SSHClient, error) {
 	} else {
 		signer, err := makePrivateKeySigner(c.PrivateKey, c.PassPhrase)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create signer: %w", err)
 		}
 		config.Auth = []gossh.AuthMethod{gossh.PublicKeys(signer)}
 	}
@@ -137,11 +139,13 @@ func NewClient(c ConnInfo) (*SSHClient, error) {
 		proto = "tcp6"
 	}
 
+	fmt.Printf("[INFO] Connecting to SSH server: %s (user: %s, mode: %s)\n", addr, c.User, c.AuthMode)
 	client, err := gossh.Dial(proto, addr, config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to SSH server %s: %w", addr, err)
 	}
 
+	fmt.Printf("[INFO] SSH connection established: %s\n", addr)
 	return &SSHClient{Client: client}, nil
 }
 

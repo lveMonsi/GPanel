@@ -52,7 +52,7 @@
           <el-button
             :icon="Setting"
             size="small"
-            @click="showSettingsDialog = true"
+            @click="openSettingsDialog"
           >
             设置
           </el-button>
@@ -274,7 +274,7 @@
       title="终端设置"
       width="400px"
     >
-      <el-form :model="settingsForm" label-width="80px">
+      <el-form :model="settingsForm" label-width="100px">
         <el-form-item label="字体大小">
           <el-slider
             v-model="settingsForm.fontSize"
@@ -290,6 +290,15 @@
             <el-radio value="dark">暗色</el-radio>
             <el-radio value="light">亮色</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="最大重连次数">
+          <el-input-number
+            v-model="settingsForm.maxReconnectRetries"
+            :min="0"
+            :max="20"
+            :step="1"
+          />
+          <div class="form-tip">设置为 0 表示不自动重连</div>
         </el-form-item>
       </el-form>
 
@@ -399,7 +408,8 @@ const terminalSettings = reactive({
   cursorBlink: 'enable',
   cursorStyle: 'underline',
   scrollback: '1000',
-  scrollSensitivity: '10'
+  scrollSensitivity: '10',
+  maxReconnectRetries: 5
 });
 
 const newTerminalForm = reactive({
@@ -416,12 +426,15 @@ const newTerminalForm = reactive({
 
 const settingsForm = reactive({
   fontSize: 14,
-  theme: 'dark' as 'light' | 'dark'
+  theme: 'dark' as 'light' | 'dark',
+  maxReconnectRetries: 5
 });
 
 let tabCounter = 0;
 let latencyTimer: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: Map<string, ReturnType<typeof setInterval>> = new Map();
+let reconnectCount: Map<string, number> = new Map();
+let reconnectAbandoned: Map<string, boolean> = new Map(); // 标记已放弃重连的终端
 
 const filteredCommands = computed(() => {
   if (!commandSearchKeyword.value) {
@@ -564,11 +577,13 @@ const closeCurrentTab = () => {
 };
 
 const handleTabRemove = (targetName: string) => {
-  // 清除重连定时器
+  // 清除重连定时器和计数器
   if (reconnectTimer.has(targetName)) {
     clearInterval(reconnectTimer.get(targetName)!);
     reconnectTimer.delete(targetName);
   }
+  reconnectCount.delete(targetName);
+  reconnectAbandoned.delete(targetName); // 清除放弃重连的标记
 
   const terminal = terminalRefs.value.get(targetName);
   if (terminal) {
@@ -599,11 +614,14 @@ const handleConnected = (id: string) => {
   if (tab) {
     tab.status = 'online';
     tab.latency = 0;
-    // 清除重连定时器
+    // 清除重连定时器和计数器
     if (reconnectTimer.has(id)) {
       clearInterval(reconnectTimer.get(id)!);
       reconnectTimer.delete(id);
+      reconnectCount.delete(id);
     }
+    // 清除放弃重连的标记
+    reconnectAbandoned.delete(id);
   }
 };
 
@@ -611,8 +629,10 @@ const handleDisconnected = (id: string, event: Event) => {
   const tab = terminalTabs.value.find(t => t.id === id);
   if (tab) {
     tab.status = 'offline';
-    // 启动自动重连
-    startAutoReconnect(id);
+    // 只在定时器不存在时启动自动重连
+    if (!reconnectTimer.has(id)) {
+      startAutoReconnect(id);
+    }
   }
 };
 
@@ -620,6 +640,17 @@ const handleError = (id: string, error: Event) => {
   const tab = terminalTabs.value.find(t => t.id === id);
   if (tab) {
     tab.status = 'offline';
+  }
+  // 在终端中显示错误信息（使用 write 确保消息能显示）
+  const terminal = terminalRefs.value.get(id);
+  if (terminal) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errMsg = `\r\n[系统错误] ${errorMsg}\r\n`;
+    const term = terminal.getTerm();
+    if (term) {
+      term.write('\x1b[31m' + errMsg + '\x1b[m');
+    }
+    console.error(`终端 ${id} 错误:`, error);
   }
 };
 
@@ -635,9 +666,18 @@ const handleFontSizeChange = (value: number) => {
   terminalSettings.fontSize = value.toString();
 };
 
+const openSettingsDialog = () => {
+  // 同步当前设置到表单
+  settingsForm.fontSize = parseInt(terminalSettings.fontSize);
+  settingsForm.theme = theme.value as 'light' | 'dark';
+  settingsForm.maxReconnectRetries = terminalSettings.maxReconnectRetries;
+  showSettingsDialog.value = true;
+};
+
 const applySettings = () => {
   terminalSettings.fontSize = settingsForm.fontSize.toString();
   theme.value = settingsForm.theme;
+  terminalSettings.maxReconnectRetries = settingsForm.maxReconnectRetries;
   showSettingsDialog.value = false;
   ElMessage.success('设置已应用');
 };
@@ -678,21 +718,51 @@ const startAutoReconnect = (id: string) => {
     return;
   }
 
-  let retryCount = 0;
-  const maxRetries = 5;
+  // 如果该终端已经放弃重连，不再启动重连
+  if (reconnectAbandoned.has(id)) {
+    console.log(`[重连] 终端 ${id} 已放弃重连，跳过`);
+    return;
+  }
+
+  const maxRetries = terminalSettings.maxReconnectRetries;
+  if (maxRetries <= 0) {
+    return;
+  }
+
+  // 初始化重连次数
+  reconnectCount.set(id, 0);
 
   const timer = setInterval(() => {
-    retryCount++;
+    const currentRetry = (reconnectCount.get(id) || 0) + 1;
+    reconnectCount.set(id, currentRetry);
+
     const terminal = terminalRefs.value.get(id);
     if (terminal) {
-      console.log(`尝试重连终端 ${id} (${retryCount}/${maxRetries})`);
+      console.log(`尝试重连终端 ${id} (${currentRetry}/${maxRetries})`);
+      // 在终端中显示重连信息（使用 write 确保消息能显示）
+      const reconnectMsg = `\r\n[系统] 正在尝试重连... (${currentRetry}/${maxRetries})\r\n`;
+      const term = terminal.getTerm();
+      if (term) {
+        term.write('\x1b[33m' + reconnectMsg + '\x1b[m');
+      }
       terminal.reconnect();
     }
 
-    if (retryCount >= maxRetries) {
+    if (currentRetry >= maxRetries) {
       clearInterval(timer);
       reconnectTimer.delete(id);
-      ElMessage.warning(`终端 ${id} 重连失败，请手动重连`);
+      reconnectCount.delete(id);
+      reconnectAbandoned.set(id, true); // 标记该终端已放弃重连
+      // 在终端中显示失败信息
+      const terminal = terminalRefs.value.get(id);
+      if (terminal) {
+        const failMsg = `\r\n[系统] 自动重连失败，已达到最大重试次数 (${maxRetries} 次)，请手动重连\r\n`;
+        const term = terminal.getTerm();
+        if (term) {
+          term.write('\x1b[31m' + failMsg + '\x1b[m');
+        }
+      }
+      ElMessage.warning(`终端重连失败，已达到最大重试次数`);
     }
   }, 3000);
 
@@ -1285,5 +1355,12 @@ defineExpose({
 
 :deep(.el-drawer__body) {
   padding: 0 20px 20px 20px;
+}
+
+/* 表单提示 */
+.form-tip {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
 }
 </style>

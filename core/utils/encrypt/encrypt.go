@@ -48,8 +48,24 @@ func StringDecrypt(text string) (string, error) {
 	if len(text) == 0 {
 		return "", nil
 	}
-	key := []byte("gpanel-encrypt-key-32-bytes-length") // 32字节密钥
-	return StringDecryptWithKey(text, key)
+	// 尝试用多个可能的密钥解密（向后兼容）
+	keys := [][]byte{
+		[]byte("gpanel-encrypt-key-32-bytes-length"),     // 32字节（当前）
+		[]byte("gpanel-encrypt-key-32-bytes-length!!"),   // 34字节（可能）
+		[]byte("gpanel-encrypt-key-32-bytes-length!"),    // 33字节（可能）
+		[]byte("gpanel-encrypt-key-32-bytes!!"),          // 29字节（旧）
+		[]byte("gpanel-encrypt-key-32-bytes!"),           // 28字节（更旧）
+		[]byte("gpanel-encrypt-key-32-bytes-length-extra"), // 38字节（可能）
+	}
+	
+	for _, key := range keys {
+		result, err := StringDecryptWithKey(text, key)
+		if err == nil && result != "" {
+			return result, nil
+		}
+	}
+	
+	return "", errors.New("failed to decrypt with all possible keys")
 }
 
 // StringDecryptWithKey 使用指定密钥解密字符串
@@ -67,12 +83,44 @@ func StringDecryptWithKey(text string, key []byte) (string, error) {
 		return "", err
 	}
 	var tpass []byte
+	
+	// 尝试用原始密钥解密
 	tpass, err = aesDecryptWithSalt(key, bytesPass)
 	if err == nil {
 		result := string(tpass[:])
-		return result, err
+		return result, nil
 	}
+	
+	// 如果失败，尝试用调整后的密钥解密
+	adjustedKey := adjustKeyLength(key)
+	tpass, err = aesDecryptWithSalt(adjustedKey, bytesPass)
+	if err == nil {
+		result := string(tpass[:])
+		return result, nil
+	}
+	
 	return "", err
+}
+
+// adjustKeyLength 调整密钥长度以符合AES要求（16、24或32字节）
+func adjustKeyLength(key []byte) []byte {
+	keyLen := len(key)
+	if keyLen <= 16 {
+		// 填充到16字节
+		adjusted := make([]byte, 16)
+		copy(adjusted, key)
+		return adjusted
+	} else if keyLen <= 24 {
+		// 填充到24字节
+		adjusted := make([]byte, 24)
+		copy(adjusted, key)
+		return adjusted
+	} else {
+		// 截断到32字节
+		adjusted := make([]byte, 32)
+		copy(adjusted, key)
+		return adjusted
+	}
 }
 
 func padding(plaintext []byte, blockSize int) []byte {

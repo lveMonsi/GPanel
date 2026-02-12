@@ -49,6 +49,8 @@ const terminalElement = ref<HTMLDivElement | null>(null);
 const fitAddon = new FitAddon();
 const termReady = ref(false);
 const webSocketReady = ref(false);
+const firstDataReceived = ref(false);
+const sshSessionReady = ref(false);
 const term = ref<Terminal | null>(null);
 const terminalSocket = ref<WebSocket | null>(null);
 const heartbeatTimer = ref<NodeJS.Timeout | null>(null);
@@ -235,7 +237,7 @@ const runRealTerminal = () => {
     terminalSocket.value.send(connectMsg);
   }
 
-  emit('connected');
+  // 不要在这里 emit('connected')，等待后端确认
 };
 
 const onWSReceive = (message: MessageEvent) => {
@@ -246,6 +248,19 @@ const onWSReceive = (message: MessageEvent) => {
         term.value.focus();
         if (wsMsg.data) {
           const receiveMsg = Base64.decode(wsMsg.data);
+          // 检查是否是系统消息（成功消息或错误消息）
+          const isSystemMessage = receiveMsg.includes('[系统]') || receiveMsg.includes('[ERROR]');
+
+          // 只有在收到非系统消息时才认为连接成功
+          if (!firstDataReceived.value && !isSystemMessage) {
+            firstDataReceived.value = true;
+            emit('connected');
+          } else if (!firstDataReceived.value && isSystemMessage) {
+            // 收到系统消息，但还没有收到真正的终端数据
+            // 只标记已收到消息，但不认为连接成功
+            firstDataReceived.value = false;
+          }
+
           term.value.write(receiveMsg);
         }
       }
@@ -262,8 +277,10 @@ const errorRealTerminal = (ex: Event) => {
   let message = (ex as any).message;
   if (!message) message = 'disconnected';
   if (term.value) {
-    term.value.write(`\x1b[31m${message}\x1b[m\r\n`);
+    // 显示错误信息，使用红色
+    term.value.write(`\r\n\x1b[31m[系统错误] ${message}\x1b[m\r\n`);
   }
+  console.error('[Terminal] WebSocket error:', ex);
   emit('error', ex);
 };
 
@@ -273,11 +290,12 @@ const closeRealTerminal = (ev: CloseEvent) => {
     heartbeatTimer.value = null;
   }
   webSocketReady.value = false;
-  if (term.value) {
+  // 只有在正常关闭（非错误）时才显示断开消息
+  if (ev.code === 1000 && term.value) {
     term.value.write('\r\n\x1b[31mThe connection has been disconnected.\x1b[m\r\n');
-    if (ev.reason) {
-      term.value.write(ev.reason + '\r\n');
-    }
+  }
+  if (ev.reason && term.value) {
+    term.value.write(ev.reason + '\r\n');
   }
   emit('disconnected', ev);
 };
@@ -354,8 +372,8 @@ const onClose = (isKeepShow: boolean = false) => {
     }
   }
 
-  // 清理容器
-  if (terminalElement.value) {
+  // 清理容器（仅在不是保持显示模式时）
+  if (!isKeepShow && terminalElement.value) {
     terminalElement.value.innerHTML = '';
   }
 
@@ -364,13 +382,43 @@ const onClose = (isKeepShow: boolean = false) => {
 };
 
 const reconnect = () => {
-  onClose(true);
+  // 只关闭 WebSocket 连接和清理心跳定时器，保持终端实例
+  if (heartbeatTimer.value) {
+    try {
+      clearInterval(heartbeatTimer.value);
+    } catch {
+      // 忽略错误
+    } finally {
+      heartbeatTimer.value = null;
+    }
+  }
+
+  // 关闭 WebSocket 连接
+  if (terminalSocket.value) {
+    try {
+      if (terminalSocket.value.readyState === WebSocket.OPEN ||
+          terminalSocket.value.readyState === WebSocket.CONNECTING) {
+        terminalSocket.value.close();
+      }
+    } catch {
+      // 忽略错误
+    } finally {
+      terminalSocket.value = null;
+    }
+  }
+
   webSocketReady.value = false;
+  firstDataReceived.value = false; // 重置标志
+  sshSessionReady.value = false; // 重置 SSH 会话标志
   initWebSocket();
 };
 
 const getLatency = (): number => {
   return latency.value;
+};
+
+const getTerm = () => {
+  return term.value;
 };
 
 // 初始化
@@ -402,7 +450,8 @@ defineExpose({
   reconnect,
   isWsOpen,
   sendMsg,
-  getLatency
+  getLatency,
+  getTerm
 });
 </script>
 

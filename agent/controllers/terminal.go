@@ -196,14 +196,18 @@ func (tc *TerminalController) TerminalSSH(c *gin.Context) {
 	}
 
 	client, err := ssh.NewClient(connInfo)
-	if tc.handleWsError(wsConn, err) {
+	if err != nil {
+		log.Printf("[ERROR] failed to create SSH client: %v", err)
+		tc.handleWsError(wsConn, err)
 		return
 	}
 	defer client.Close()
 
 	// 创建 SSH 会话
 	sws, err := terminal.NewLogicSshWsSession(cols, rows, client.Client, wsConn, "")
-	if tc.handleWsError(wsConn, err) {
+	if err != nil {
+		log.Printf("[ERROR] failed to create SSH session: %v", err)
+		tc.handleWsError(wsConn, err)
 		return
 	}
 	defer sws.Close()
@@ -212,6 +216,23 @@ func (tc *TerminalController) TerminalSSH(c *gin.Context) {
 	quitChan := make(chan bool, 3)
 	sws.Start(quitChan)
 	go sws.Wait(quitChan)
+
+	// 等待一小段时间，让 SSH 会话稳定
+	time.Sleep(300 * time.Millisecond)
+
+	// 发送连接成功消息（在会话启动后）
+	successMsg := fmt.Sprintf("\r\n\x1b[32m[系统] SSH 连接成功！\x1b[m\r\n")
+	wsData, jsonErr := json.Marshal(terminal.WsMsg{
+		Type: terminal.WsMsgCmd,
+		Data: base64.StdEncoding.EncodeToString([]byte(successMsg)),
+	})
+	if jsonErr != nil {
+		log.Printf("[ERROR] failed to marshal success message: %v", jsonErr)
+	} else {
+		if writeErr := wsConn.WriteMessage(websocket.TextMessage, wsData); writeErr != nil {
+			log.Printf("[WARN] failed to send success message: %v", writeErr)
+		}
+	}
 
 	<-quitChan
 
@@ -224,24 +245,29 @@ func (tc *TerminalController) handleWsError(ws *websocket.Conn, err error) bool 
 	if err != nil {
 		log.Printf("[ERROR] terminal websocket error: %v", err)
 
-		// 尝试发送关闭消息
+		// 先发送错误消息到前端
+		errorMsg := fmt.Sprintf("\r\n\x1b[31m[ERROR] %s\x1b[m\r\n", err.Error())
+		wsData, jsonErr := json.Marshal(terminal.WsMsg{
+			Type: terminal.WsMsgCmd,
+			Data: base64.StdEncoding.EncodeToString([]byte(errorMsg)),
+		})
+		if jsonErr != nil {
+			log.Printf("[ERROR] failed to marshal error message: %v", jsonErr)
+			_ = ws.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"cmd\",\"data\":\"Connection error\"}"))
+		} else {
+			// 发送错误消息
+			if writeErr := ws.WriteMessage(websocket.TextMessage, wsData); writeErr != nil {
+				log.Printf("[WARN] failed to send error message: %v", writeErr)
+			}
+			// 等待消息发送
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		// 然后关闭连接
 		dt := time.Now().Add(time.Second)
 		closeMsg := []byte(err.Error())
-
 		if ctlerr := ws.WriteControl(websocket.CloseMessage, closeMsg, dt); ctlerr != nil {
 			log.Printf("[WARN] failed to send WebSocket close message: %v", ctlerr)
-
-			// 如果关闭消息失败，尝试发送普通错误消息
-			wsData, jsonErr := json.Marshal(terminal.WsMsg{
-				Type: terminal.WsMsgCmd,
-				Data: base64.StdEncoding.EncodeToString([]byte(err.Error())),
-			})
-			if jsonErr != nil {
-				log.Printf("[ERROR] failed to marshal error message: %v", jsonErr)
-				_ = ws.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"cmd\",\"data\":\"Connection error\"}"))
-			} else {
-				_ = ws.WriteMessage(websocket.TextMessage, wsData)
-			}
 		}
 		return true
 	}
