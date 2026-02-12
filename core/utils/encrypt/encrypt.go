@@ -15,7 +15,7 @@ func StringEncrypt(text string) (string, error) {
 	if len(text) == 0 {
 		return "", nil
 	}
-	key := []byte("gpanel-encrypt-key-32-bytes!") // 32字节密钥
+	key := []byte("gpanel-encrypt-key-32-bytes-length") // 32字节密钥
 	return StringEncryptWithKey(text, key)
 }
 
@@ -23,6 +23,16 @@ func StringEncrypt(text string) (string, error) {
 func StringEncryptWithKey(text string, key []byte) (string, error) {
 	if len(text) == 0 || len(key) == 0 {
 		return "", nil
+	}
+	// 确保密钥长度为16、24或32字节（AES-128、AES-192、AES-256）
+	if len(key) < 16 {
+		// 如果密钥太短，填充到16字节
+		paddedKey := make([]byte, 16)
+		copy(paddedKey, key)
+		key = paddedKey
+	} else if len(key) > 32 {
+		// 如果密钥太长，截断到32字节
+		key = key[:32]
 	}
 	pass := []byte(text)
 	xpass, err := aesEncryptWithSalt(key, pass)
@@ -38,7 +48,7 @@ func StringDecrypt(text string) (string, error) {
 	if len(text) == 0 {
 		return "", nil
 	}
-	key := []byte("gpanel-encrypt-key-32-bytes!") // 32字节密钥
+	key := []byte("gpanel-encrypt-key-32-bytes-length") // 32字节密钥
 	return StringDecryptWithKey(text, key)
 }
 
