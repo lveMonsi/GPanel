@@ -76,9 +76,8 @@ check_root() {
 
 check_os() {
     if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-        SYS_VERSION=$VERSION_ID
+        # 不使用 source 避免变量污染，手动解析
+        OS=$(grep -oP '^ID=\K.*' /etc/os-release 2>/dev/null | tr -d '"' || echo "unknown")
     elif [ -f /etc/redhat-release ]; then
         OS="rhel"
     else
