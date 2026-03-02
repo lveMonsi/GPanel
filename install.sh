@@ -78,7 +78,7 @@ check_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
-        OS_VERSION=$VERSION_ID
+        SYS_VERSION=$VERSION_ID
     elif [ -f /etc/redhat-release ]; then
         OS="rhel"
     else
