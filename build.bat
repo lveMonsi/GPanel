@@ -100,10 +100,16 @@ echo Windows amd64 Core build completed
 
 echo Building Windows gpctl...
 cd "%BASE_PATH%\tools"
+go mod tidy
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] gpctl dependencies update failed
+    pause
+    exit /b 1
+)
 set CGO_ENABLED=0
 set GOOS=windows
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\windows-amd64\gpctl.exe" gpctl.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\windows-amd64\gpctl.exe" .
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Windows gpctl build failed
     pause
@@ -129,7 +135,7 @@ cd "%BASE_PATH%\tools"
 set CGO_ENABLED=0
 set GOOS=linux
 set GOARCH=amd64
-go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\linux-amd64\gpctl" gpctl.go
+go build -trimpath -ldflags "-s -w" -o "%BUILD_PATH%\linux-amd64\gpctl" .
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Linux gpctl build failed
     pause

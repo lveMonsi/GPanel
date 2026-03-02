@@ -81,14 +81,16 @@ build_agent_linux:
 
 build_gpctl:
 	@echo "构建 gpctl ($(GOOS)/$(GOARCH))..."
+	cd $(BASE_PATH)/tools && $(GOCMD) mod tidy
 	cd $(BASE_PATH)/tools \
-	&& CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CTL_NAME) gpctl.go
+	&& CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CTL_NAME) .
 	@echo "gpctl 构建完成"
 
 build_gpctl_linux:
 	@echo "构建 gpctl (linux/amd64)..."
+	cd $(BASE_PATH)/tools && $(GOCMD) mod tidy
 	cd $(BASE_PATH)/tools \
-	&& CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CTL_NAME) gpctl.go
+	&& CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -trimpath $(LDFLAGS) -o $(BUILD_PATH)/$(CTL_NAME) .
 	@echo "gpctl 构建完成"
 
 build: clean build_frontend build_core build_agent build_gpctl
