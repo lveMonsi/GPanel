@@ -13,6 +13,7 @@ export interface SSHConfig {
   password: string;
   authMode: 'password' | 'key';
   key?: string;
+  passPhrase?: string;  // 私钥密码
 }
 
 export interface WsMsg {

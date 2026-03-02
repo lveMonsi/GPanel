@@ -82,10 +82,17 @@ type HostConnTest struct {
 
 // HostTreeNode 主机树节点
 type HostTreeNode struct {
-	ID       uint            `json:"id"`
-	Name     string          `json:"name"`
-	Type     string          `json:"type"` // group 或 host
-	Children []HostTreeNode  `json:"children"`
+	ID               uint            `json:"id"`
+	Name             string          `json:"name"`
+	Type             string          `json:"type"` // group 或 host
+	GroupID          uint            `json:"groupID,omitempty"`
+	Addr             string          `json:"addr,omitempty"`
+	Port             int             `json:"port,omitempty"`
+	User             string          `json:"user,omitempty"`
+	AuthMode         string          `json:"authMode,omitempty"`
+	RememberPassword bool            `json:"rememberPassword,omitempty"`
+	Description      string          `json:"description,omitempty"`
+	Children         []HostTreeNode  `json:"children"`
 }
 
 // HostMove 主机移动到其他分组

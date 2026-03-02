@@ -119,9 +119,16 @@ func (s *HostService) GetHostTree() ([]dto.HostTreeNode, error) {
 		var children []dto.HostTreeNode
 		for _, host := range hosts {
 			children = append(children, dto.HostTreeNode{
-				ID:   host.ID,
-				Name: host.Name,
-				Type: "host",
+				ID:               host.ID,
+				Name:             host.Name,
+				Type:             "host",
+				GroupID:          host.GroupID,
+				Addr:             host.Addr,
+				Port:             host.Port,
+				User:             host.User,
+				AuthMode:         host.AuthMode,
+				RememberPassword: host.RememberPassword,
+				Description:      host.Description,
 			})
 		}
 		tree = append(tree, dto.HostTreeNode{

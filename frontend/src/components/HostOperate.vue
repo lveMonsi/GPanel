@@ -113,7 +113,7 @@ import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import type { HostOperate, HostGroupInfo } from '@/api/interface/host'
-import { testHostConnection } from '@/api/modules/host'
+import { testHostConnection, getHostForTerminal } from '@/api/modules/host'
 
 interface Props {
   visible: boolean
@@ -198,11 +198,42 @@ const formRules: FormRules = {
   ]
 }
 
-watch(() => props.visible, (val) => {
+watch(() => props.visible, async (val) => {
   dialogVisible.value = val
   if (val) {
     isEdit.value = !!props.host?.id
-    if (props.host) {
+    if (props.host?.id) {
+      // 编辑模式：从后端获取完整的主机信息（包含解密后的密码/密钥）
+      try {
+        const res = await getHostForTerminal(props.host.id)
+        const hostData = res.data
+        formData.value = {
+          id: hostData.id,
+          groupID: hostData.groupID,
+          name: hostData.name,
+          addr: hostData.addr,
+          port: hostData.port,
+          user: hostData.user,
+          authMode: hostData.authMode,
+          password: hostData.password || '',
+          privateKey: hostData.privateKey || '',
+          passPhrase: hostData.passPhrase || '',
+          rememberPassword: hostData.rememberPassword,
+          description: hostData.description || ''
+        }
+      } catch (error) {
+        console.error('获取主机信息失败:', error)
+        ElMessage.error('获取主机信息失败')
+        // 如果获取失败，使用传入的数据
+        formData.value = {
+          ...props.host,
+          password: '',
+          privateKey: '',
+          passPhrase: ''
+        }
+      }
+    } else if (props.host) {
+      // 新增模式但有传入数据
       formData.value = {
         ...props.host,
         password: '',
@@ -210,6 +241,7 @@ watch(() => props.visible, (val) => {
         passPhrase: ''
       }
     } else {
+      // 全新新增
       formData.value = {
         groupID: props.groups[0]?.id || 0,
         name: '',

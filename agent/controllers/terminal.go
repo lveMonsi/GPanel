@@ -187,6 +187,7 @@ func (tc *TerminalController) TerminalSSH(c *gin.Context) {
 		AuthMode:    "password",
 		Password:    connectReq.Password,
 		PrivateKey:  []byte(connectReq.Key),
+		PassPhrase:  []byte(connectReq.PassPhrase),
 		DialTimeOut: 5 * time.Second,
 	}
 

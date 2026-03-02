@@ -78,6 +78,13 @@ export interface HostTreeNode {
   id: number
   name: string
   type: 'group' | 'host'
+  groupID?: number
+  addr?: string
+  port?: number
+  user?: string
+  authMode?: 'password' | 'key'
+  rememberPassword?: boolean
+  description?: string
   children?: HostTreeNode[]
 }
 

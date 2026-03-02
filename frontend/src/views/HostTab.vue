@@ -252,7 +252,8 @@ import {
   deleteHost,
   testHostConnection as testConnection,
   exportHosts as exportHostsAPI,
-  importHosts as importHostsAPI
+  importHosts as importHostsAPI,
+  getHostForTerminal
 } from '@/api/modules/host';
 import type { HostTreeNode, HostGroupInfo, HostGroupOperate, HostOperate } from '@/api/interface/host';
 
@@ -386,33 +387,42 @@ const deleteGroup = async (data: HostTreeNode) => {
 
 const openCreateHostDialog = () => {
   hostDialogTitle.value = '新建主机';
+  delete (hostForm as any).id;
   if (groups.value.length > 0) {
     hostForm.groupID = groups.value[0].id;
   }
   hostDialogVisible.value = true;
 };
 
-const openEditHostDialog = (data: HostTreeNode) => {
+const openEditHostDialog = async (data: HostTreeNode) => {
   hostDialogTitle.value = '编辑主机';
-  Object.assign(hostForm, {
-    id: data.id,
-    groupID: (data as any).groupID || 0,
-    name: data.name,
-    addr: (data as any).addr || '',
-    port: (data as any).port || 22,
-    user: (data as any).user || '',
-    authMode: (data as any).authMode || 'password',
-    password: '',
-    privateKey: '',
-    passPhrase: '',
-    rememberPassword: false,
-    description: ''
-  });
-  hostDialogVisible.value = true;
+  try {
+    // 从后端获取完整的主机信息（包含解密后的密码/密钥）
+    const res = await getHostForTerminal(data.id);
+    const hostData = res.data;
+    Object.assign(hostForm, {
+      id: hostData.id,
+      groupID: hostData.groupID || 0,
+      name: hostData.name,
+      addr: hostData.addr || '',
+      port: hostData.port || 22,
+      user: hostData.user || '',
+      authMode: hostData.authMode || 'password',
+      password: hostData.password || '',
+      privateKey: hostData.privateKey || '',
+      passPhrase: hostData.passPhrase || '',
+      rememberPassword: hostData.rememberPassword || false,
+      description: hostData.description || ''
+    });
+    hostDialogVisible.value = true;
+  } catch (error) {
+    ElMessage.error('获取主机信息失败');
+  }
 };
 
 const resetHostForm = () => {
   hostFormRef.value?.resetFields();
+  delete (hostForm as any).id;
   Object.assign(hostForm, {
     groupID: 0,
     name: '',
@@ -447,7 +457,9 @@ const submitHostForm = async () => {
 
 const testHostConnection = async (data: HostTreeNode) => {
   try {
-    const hostData = data as any;
+    // 先从后端获取完整的主机信息（包含解密后的密码/密钥）
+    const connRes = await getHostForTerminal(data.id);
+    const hostData = connRes.data;
     const testData = {
       addr: hostData.addr,
       port: hostData.port,

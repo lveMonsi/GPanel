@@ -259,6 +259,17 @@
               placeholder="请输入私钥内容"
             />
           </el-form-item>
+          <el-form-item
+            v-if="newTerminalForm.sshConfig.authMode === 'key'"
+            label="私钥密码"
+          >
+            <el-input
+              v-model="newTerminalForm.sshConfig.passPhrase"
+              type="password"
+              placeholder="如果私钥有密码，请输入"
+              show-password
+            />
+          </el-form-item>
         </template>
       </el-form>
 
@@ -420,7 +431,8 @@ const newTerminalForm = reactive({
     user: '',
     password: '',
     authMode: 'password' as 'password' | 'key',
-    key: ''
+    key: '',
+    passPhrase: ''
   } as SSHConfig
 });
 
@@ -506,6 +518,7 @@ const connectHost = async (host: HostTreeNode) => {
         user: hostInfo.user,
         password: hostInfo.authMode === 'password' ? hostInfo.password : '',
         key: hostInfo.authMode === 'key' ? hostInfo.privateKey : '',
+        passPhrase: hostInfo.authMode === 'key' ? hostInfo.passPhrase : '',
         authMode: hostInfo.authMode
       },
       cols: 80,
@@ -566,7 +579,8 @@ const createTerminal = () => {
     user: '',
     password: '',
     authMode: 'password',
-    key: ''
+    key: '',
+    passPhrase: ''
   };
 };
 
