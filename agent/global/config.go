@@ -4,20 +4,19 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-// 全局配置变量
+// 全局配置变量（带默认值）
 var (
-	ServerMode       = "release"
-	ListenAddr       = "0.0.0.0:9998"
-	LogLevel         = "info"
-	LogFile          = "/var/log/gpanel/agent.log"
-	DataDir          = "/var/lib/gpanel"
-	SecurityEntrance = "/"
+	ServerMode = "release"
+	ListenAddr = "0.0.0.0:9998"
+	LogLevel   = "info"
+	LogFile    = "/var/log/gpanel/agent.log"
+	DataDir    = "/var/lib/gpanel"
 )
 
 // InitConfig 初始化配置
+// Agent 配置完全通过环境变量控制，不再使用配置文件
 func InitConfig() error {
 	// 读取环境变量
 	if mode := os.Getenv("GIN_MODE"); mode != "" {
@@ -36,37 +35,11 @@ func InitConfig() error {
 		DataDir = dataDir
 	}
 
-	// 读取配置文件（如果存在）
-	configPath := filepath.Join(".", "config", "agent.yaml")
-	if data, err := os.ReadFile(configPath); err == nil {
-		parseConfig(string(data))
-	}
-
 	log.Printf("Server mode: %s", ServerMode)
 	log.Printf("Listen address: %s", ListenAddr)
+	log.Printf("Data directory: %s", DataDir)
 
 	return nil
-}
-
-// parseConfig 解析配置文件
-func parseConfig(data string) {
-	lines := strings.Split(data, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.Contains(line, "server:") || strings.Contains(line, "mode:") {
-			if parts := strings.Split(line, ":"); len(parts) > 1 {
-				ServerMode = strings.TrimSpace(parts[1])
-			}
-		}
-		if strings.Contains(line, "listen:") {
-			if parts := strings.Split(line, ":"); len(parts) > 1 {
-				ListenAddr = strings.TrimSpace(parts[1])
-			}
-		}
-	}
 }
 
 // GetServerMode 获取服务器模式

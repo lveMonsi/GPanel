@@ -112,8 +112,7 @@ install:
 	chmod +x /opt/gpanel/$(AGENT_NAME)
 	cp $(BUILD_PATH)/$(CTL_NAME) /usr/local/bin/
 	chmod +x /usr/local/bin/$(CTL_NAME)
-	cp config.yaml /opt/gpanel/ 2>/dev/null || echo "警告: config.yaml 不存在，将使用默认配置"
-	cp agent/config/agent.yaml /opt/gpanel/ 2>/dev/null || echo "警告: agent.yaml 不存在，将使用默认配置"
+	cp gpanel-agent.service /etc/systemd/system/
 	cp gpanel.service /etc/systemd/system/
 	@echo "安装完成！"
 	@echo "使用以下命令启动服务:"
@@ -141,8 +140,7 @@ deploy: build_linux
 	chmod +x /opt/gpanel/$(AGENT_NAME)
 	cp $(BUILD_PATH)/$(CTL_NAME) /usr/local/bin/
 	chmod +x /usr/local/bin/$(CTL_NAME)
-	cp config.yaml /opt/gpanel/ 2>/dev/null || true
-	cp agent/config/agent.yaml /opt/gpanel/ 2>/dev/null || true
+	cp gpanel-agent.service /etc/systemd/system/
 	cp gpanel.service /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable gpanel-agent gpanel

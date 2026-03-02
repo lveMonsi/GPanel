@@ -1,0 +1,98 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read version from .env
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ -n "${{ github.ref_name }}" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION=$(grep -oP 'VERSION=\K.*' .env)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build:pro
+          mkdir -p ../core/routes/web/dist
+          cp -r dist/* ../core/routes/web/dist/
+
+      - name: Build Linux amd64
+        run: |
+          mkdir -p build/linux-amd64
+          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpanel .
+          cd ../agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpanel-agent .
+          cd ../tools && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpctl gpctl.go
+
+      - name: Build Linux arm64
+        run: |
+          mkdir -p build/linux-arm64
+          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpanel .
+          cd ../agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpanel-agent .
+          cd ../tools && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpctl gpctl.go
+
+      - name: Build Windows amd64
+        run: |
+          mkdir -p build/windows-amd64
+          cd core && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpanel.exe .
+          cd ../agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpanel-agent.exe .
+          cd ../tools && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpctl.exe gpctl.go
+
+      - name: Create archives
+        run: |
+          cd build
+          tar -czvf gpanel-linux-amd64.tar.gz linux-amd64/
+          tar -czvf gpanel-linux-arm64.tar.gz linux-arm64/
+          cd windows-amd64 && zip -r ../gpanel-windows-amd64.zip .
+
+      - name: Generate checksums
+        run: |
+          cd build
+          sha256sum gpanel-linux-amd64.tar.gz > checksums.txt
+          sha256sum gpanel-linux-arm64.tar.gz >> checksums.txt
+          sha256sum gpanel-windows-amd64.zip >> checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: GPanel ${{ steps.version.outputs.version }}
+          files: |
+            build/gpanel-linux-amd64.tar.gz
+            build/gpanel-linux-arm64.tar.gz
+            build/gpanel-windows-amd64.zip
+            build/checksums.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
