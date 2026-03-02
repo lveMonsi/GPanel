@@ -35,11 +35,11 @@ func GetCurrentInfo(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"cpu":     cpuInfo,
-		"memory":  memInfo,
-		"disk":    diskInfo,
-		"load":    loadInfo,
-		"network": networkInfo,
+		"cpuInfo":     cpuInfo,
+		"memoryInfo":  memInfo,
+		"diskInfo":    diskInfo,
+		"loadInfo":    loadInfo,
+		"networkInfo": networkInfo,
 	})
 }
 
