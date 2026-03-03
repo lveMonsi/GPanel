@@ -1045,14 +1045,14 @@ func handleInitSecurity() {
 // generateRandomPort 生成随机端口（10000-65535）
 func generateRandomPort() string {
 	// 使用加密随机数生成器
-	minPort := 10000
-	maxPort := 65535
+	minPort := int64(10000)
+	maxPort := int64(65535)
 	rangePort := maxPort - minPort + 1
 
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(rangePort)))
+	n, err := rand.Int(rand.Reader, big.NewInt(rangePort))
 	if err != nil {
 		// 回退到时间戳方式
-		return fmt.Sprintf("%d", minPort+time.Now().UnixNano()%int64(rangePort))
+		return fmt.Sprintf("%d", minPort+time.Now().UnixNano()%rangePort)
 	}
 
 	return fmt.Sprintf("%d", minPort+n.Int64())
