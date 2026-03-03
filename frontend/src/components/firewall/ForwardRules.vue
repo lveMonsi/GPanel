@@ -193,11 +193,13 @@ const loadRules = async () => {
 
 const handlePageChange = (page: number) => {
   currentPage.value = page;
+  loadRules();
 };
 
 const handleSizeChange = (size: number) => {
   pageSize.value = size;
   currentPage.value = 1;
+  loadRules();
 };
 
 const handleSelectionChange = (rows: FireInfo[]) => {
