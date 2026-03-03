@@ -40,6 +40,14 @@ ACTION=""
 # 交互模式标志
 INTERACTIVE=true
 
+# 终端输入设备（用于管道运行时从终端读取输入）
+TTY_DEVICE="/dev/tty"
+
+# 检测是否可以通过 /dev/tty 读取输入
+if [ ! -c "$TTY_DEVICE" ] && [ ! -e "$TTY_DEVICE" ]; then
+    INTERACTIVE=false
+fi
+
 # ============================================================
 # 颜色定义
 # ============================================================
@@ -140,7 +148,7 @@ confirm() {
     fi
     
     if [ "$INTERACTIVE" = true ]; then
-        read -r reply
+        read -r reply < "$TTY_DEVICE"
     else
         reply="$default"
         echo "$reply"
@@ -175,7 +183,7 @@ select_option() {
         echo -ne "${YELLOW}请选择 [1-${#options[@]}]: ${NC}"
         
         if [ "$INTERACTIVE" = true ]; then
-            read -r reply
+            read -r reply < "$TTY_DEVICE"
         else
             echo "1"
             reply=1
@@ -211,7 +219,7 @@ select_version() {
         echo -ne "${YELLOW}请选择 [0-${#versions[@]}]: ${NC}"
         
         if [ "$INTERACTIVE" = true ]; then
-            read -r reply
+            read -r reply < "$TTY_DEVICE"
         else
             echo "1"
             reply=1
@@ -220,7 +228,7 @@ select_version() {
         if [ "$reply" = "0" ]; then
             echo -ne "${YELLOW}请输入版本号 (如 v1.0.0): ${NC}"
             if [ "$INTERACTIVE" = true ]; then
-                read -r SELECTED_VERSION
+                read -r SELECTED_VERSION < "$TTY_DEVICE"
             else
                 SELECTED_VERSION="${versions[0]}"
                 echo "$SELECTED_VERSION"
@@ -245,7 +253,7 @@ input_confirm() {
     echo -ne "${YELLOW}${prompt}: ${NC}"
     
     if [ "$INTERACTIVE" = true ]; then
-        read -r reply
+        read -r reply < "$TTY_DEVICE"
     else
         reply="y"
         echo "$reply"
@@ -258,7 +266,7 @@ input_confirm() {
 press_any_key() {
     echo -ne "${CYAN}按任意键继续...${NC}"
     if [ "$INTERACTIVE" = true ]; then
-        read -n 1 -r -s
+        read -n 1 -r -s < "$TTY_DEVICE"
     fi
     echo ""
 }
@@ -867,7 +875,7 @@ do_install() {
             local choice
             echo -ne "${YELLOW}请选择 [1-3]: ${NC}"
             if [ "$INTERACTIVE" = true ]; then
-                read -r choice
+                read -r choice < "$TTY_DEVICE"
             else
                 choice=1
                 echo "$choice"
@@ -893,7 +901,7 @@ do_install() {
                 3)
                     echo -ne "${YELLOW}请输入版本号 (如 v1.0.0): ${NC}"
                     if [ "$INTERACTIVE" = true ]; then
-                        read -r VERSION
+                        read -r VERSION < "$TTY_DEVICE"
                     else
                         VERSION="$latest_version"
                         echo "$VERSION"
@@ -1020,7 +1028,7 @@ do_update() {
             local choice
             echo -ne "${YELLOW}请选择 [1-3]: ${NC}"
             if [ "$INTERACTIVE" = true ]; then
-                read -r choice
+                read -r choice < "$TTY_DEVICE"
             else
                 choice=1
                 echo "$choice"
@@ -1046,7 +1054,7 @@ do_update() {
                 3)
                     echo -ne "${YELLOW}请输入版本号 (如 v1.0.0): ${NC}"
                     if [ "$INTERACTIVE" = true ]; then
-                        read -r VERSION
+                        read -r VERSION < "$TTY_DEVICE"
                     else
                         VERSION="$latest_version"
                         echo "$VERSION"
