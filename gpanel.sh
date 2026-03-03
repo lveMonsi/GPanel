@@ -817,22 +817,6 @@ cleanup_temp() {
 }
 
 print_install_success() {
-    # 获取服务器 IP
-    SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    if [ -z "$SERVER_IP" ]; then
-        SERVER_IP="your-server-ip"
-    fi
-    
-    # 获取内网 IP（优先选择 192.168.x.x, 10.x.x.x, 172.16-31.x.x）
-    LOCAL_IP=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
-    if [ -z "$LOCAL_IP" ]; then
-        # 备用方案：从所有 IP 中筛选内网 IP
-        LOCAL_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -1)
-    fi
-    if [ -z "$LOCAL_IP" ]; then
-        LOCAL_IP="$SERVER_IP"
-    fi
-    
     echo ""
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}安装成功！${NC}"
@@ -840,9 +824,30 @@ print_install_success() {
     echo ""
     echo -e "${GREEN}安装版本:${NC} $VERSION"
     echo ""
-    echo -e "${GREEN}访问地址:${NC}"
-    echo "  本地访问: http://${LOCAL_IP}:8080"
-    echo "  外部访问: http://${SERVER_IP}:8080"
+    
+    # 使用 gpctl 显示连接信息
+    if command -v gpctl >/dev/null 2>&1; then
+        gpctl init-security --show
+    else
+        # 备用方案：手动获取 IP
+        SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+        if [ -z "$SERVER_IP" ]; then
+            SERVER_IP="your-server-ip"
+        fi
+        
+        LOCAL_IP=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -1)
+        fi
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP="$SERVER_IP"
+        fi
+        
+        echo -e "${GREEN}访问地址:${NC}"
+        echo "  本地访问: http://${LOCAL_IP}:8080"
+        echo "  外部访问: http://${SERVER_IP}:8080"
+    fi
+    
     echo ""
     echo -e "${GREEN}服务管理:${NC}"
     echo "  sudo ./gpanel.sh update    # 更新版本"
@@ -1044,6 +1049,38 @@ do_install() {
     # 启动服务
     start_services
     
+    # 检测是否为全新安装（数据库不存在），如果是则初始化安全配置
+    if [ ! -f "$DATA_DIR/gpanel.db" ]; then
+        log_step "检测到全新安装，正在初始化安全配置..."
+        
+        # 等待服务完全启动并生成数据库
+        log_info "等待服务初始化..."
+        sleep 5
+        
+        # 检查数据库是否生成
+        local wait_count=0
+        while [ ! -f "$DATA_DIR/gpanel.db" ] && [ $wait_count -lt 30 ]; do
+            sleep 1
+            ((wait_count++))
+        done
+        
+        if [ -f "$DATA_DIR/gpanel.db" ]; then
+            log_info "数据库已初始化"
+            
+            # 调用 gpctl 初始化安全配置（随机端口和安全入口）
+            if command -v gpctl >/dev/null 2>&1; then
+                log_info "正在生成随机端口和安全入口..."
+                gpctl init-security
+            else
+                log_warn "gpctl 命令不可用，跳过安全配置初始化"
+            fi
+        else
+            log_warn "数据库初始化超时，跳过安全配置"
+        fi
+    else
+        log_info "检测到已存在的数据库，保留原有配置"
+    fi
+    
     # 保存安装信息
     save_install_info "$VERSION"
     
@@ -1221,6 +1258,11 @@ do_update() {
     echo -e "${GREEN}旧版本:${NC} $current_version"
     echo -e "${GREEN}新版本:${NC} $VERSION"
     echo ""
+    
+    # 显示连接信息
+    if command -v gpctl >/dev/null 2>&1; then
+        gpctl init-security --show
+    fi
 }
 
 do_uninstall() {

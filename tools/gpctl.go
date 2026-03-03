@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -54,6 +56,8 @@ func main() {
 		handleUninstall()
 	case "user-info":
 		handleUserInfo()
+	case "init-security":
+		handleInitSecurity()
 	case "reset":
 		handleReset()
 	case "restore":
@@ -87,6 +91,10 @@ func printUsage() {
 	fmt.Println("  restart             重启 GPanel 服务 (包括 agent)")
 	fmt.Println("  uninstall           卸载 GPanel 服务")
 	fmt.Println("  user-info           获取 GPanel 用户信息")
+	fmt.Println("  init-security       初始化安全配置（随机端口和安全入口）")
+	fmt.Println("    init-security           随机生成端口和安全入口")
+	fmt.Println("    init-security --port N  指定端口，随机安全入口")
+	fmt.Println("    init-security --show    仅显示当前连接信息")
 	fmt.Println("  reset               重置 GPanel 配置")
 	fmt.Println("    reset domain      取消域名绑定")
 	fmt.Println("    reset entrance    取消安全入口 (设置为 /)")
@@ -952,4 +960,185 @@ func dirExists(path string) bool {
 		return false
 	}
 	return info.IsDir()
+}
+
+// handleInitSecurity 处理 init-security 命令
+// 功能：初始化安全配置（随机端口和安全入口）
+// 参数：
+//   --port N   指定端口
+//   --show     仅显示当前连接信息
+func handleInitSecurity() {
+	if !isRoot() {
+		fmt.Println("错误: 需要 root 权限")
+		os.Exit(1)
+	}
+
+	// 解析参数
+	showOnly := false
+	specifiedPort := ""
+
+	for i := 2; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if arg == "--show" {
+			showOnly = true
+		} else if arg == "--port" && i+1 < len(os.Args) {
+			specifiedPort = os.Args[i+1]
+			i++
+		}
+	}
+
+	// 加载当前配置
+	if err := loadConfig(); err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 仅显示模式
+	if showOnly {
+		printConnectionInfo()
+		return
+	}
+
+	fmt.Println("=== GPanel 安全配置初始化 ===")
+	fmt.Println()
+
+	// 生成随机端口（如果未指定）
+	var newPort string
+	if specifiedPort != "" {
+		newPort = specifiedPort
+		fmt.Printf("使用指定端口: %s\n", newPort)
+	} else {
+		newPort = generateRandomPort()
+		fmt.Printf("随机生成端口: %s\n", newPort)
+	}
+
+	// 生成随机安全入口
+	newEntrance := generateRandomEntrance()
+	fmt.Printf("随机生成安全入口: %s\n", newEntrance)
+
+	// 更新配置
+	fmt.Println()
+	fmt.Println("正在更新配置...")
+
+	if err := updateConfig("ServerPort", newPort); err != nil {
+		fmt.Printf("更新端口失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ 端口已更新: %s\n", newPort)
+
+	if err := updateConfig("SecurityEntrance", newEntrance); err != nil {
+		fmt.Printf("更新安全入口失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ 安全入口已更新: %s\n", newEntrance)
+
+	// 重启服务
+	fmt.Println()
+	fmt.Println("正在重启服务...")
+	restartServices()
+
+	// 显示连接信息
+	fmt.Println()
+	printConnectionInfo()
+}
+
+// generateRandomPort 生成随机端口（10000-65535）
+func generateRandomPort() string {
+	// 使用加密随机数生成器
+	minPort := 10000
+	maxPort := 65535
+	rangePort := maxPort - minPort + 1
+
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(rangePort)))
+	if err != nil {
+		// 回退到时间戳方式
+		return fmt.Sprintf("%d", minPort+time.Now().UnixNano()%int64(rangePort))
+	}
+
+	return fmt.Sprintf("%d", minPort+n.Int64())
+}
+
+// generateRandomEntrance 生成随机安全入口（8位小写字母和数字）
+func generateRandomEntrance() string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	const length = 8
+
+	b := make([]byte, length)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// 回退到时间戳方式
+			b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+			continue
+		}
+		b[i] = charset[n.Int64()]
+	}
+	return "/" + string(b)
+}
+
+// printConnectionInfo 打印连接信息
+func printConnectionInfo() {
+	fmt.Println("========================================")
+	fmt.Println("  GPanel 连接信息")
+	fmt.Println("========================================")
+	fmt.Println()
+
+	// 重新加载配置
+	if err := loadConfig(); err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		return
+	}
+
+	port := getConfig("ServerPort", "8080")
+	securityEntrance := getConfig("SecurityEntrance", "/")
+	listenAddress := getConfig("ListenAddress", "0.0.0.0")
+
+	// 获取服务器 IP
+	serverIP := getServerIP()
+
+	fmt.Printf("  监听地址: %s:%s\n", listenAddress, port)
+	fmt.Println()
+
+	if securityEntrance != "/" {
+		fmt.Printf("  安全入口: %s\n", securityEntrance)
+		fmt.Println()
+		fmt.Printf("  本地访问: http://localhost:%s%s\n", port, securityEntrance)
+		fmt.Printf("  外部访问: http://%s:%s%s\n", serverIP, port, securityEntrance)
+	} else {
+		fmt.Println("  安全入口: 未设置 (/)")
+		fmt.Println()
+		fmt.Printf("  本地访问: http://localhost:%s\n", port)
+		fmt.Printf("  外部访问: http://%s:%s\n", serverIP, port)
+	}
+
+	fmt.Println()
+	fmt.Println("========================================")
+}
+
+// getServerIP 获取服务器 IP 地址
+func getServerIP() string {
+	// 尝试获取外部 IP
+	cmd := exec.Command("hostname", "-I")
+	output, err := cmd.Output()
+	if err == nil {
+		ips := strings.TrimSpace(string(output))
+		// 取第一个 IP
+		if ips != "" {
+			return strings.Fields(ips)[0]
+		}
+	}
+
+	// 备用方案：从路由获取
+	cmd = exec.Command("ip", "route", "get", "1")
+	output, err = cmd.Output()
+	if err == nil {
+		fields := strings.Fields(string(output))
+		for i, f := range fields {
+			if f == "src" && i+1 < len(fields) {
+				return fields[i+1]
+			}
+		}
+	}
+
+	return "your-server-ip"
 }
