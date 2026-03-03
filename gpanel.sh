@@ -438,7 +438,7 @@ print_status() {
 # ============================================================
 
 get_latest_version() {
-    log_info "获取最新版本..."
+    log_info "获取最新版本..." >&2
     
     local api_url="${GITHUB_API}/${GITHUB_REPO}/releases/latest"
     local response
