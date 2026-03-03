@@ -443,8 +443,19 @@ get_latest_version() {
     local api_url="${GITHUB_API}/${GITHUB_REPO}/releases/latest"
     local response
     
+    # 下载函数（支持 wget 和 curl）
+    local fetch_cmd=""
+    if command -v wget >/dev/null 2>&1; then
+        fetch_cmd="wget -q -T 30 -O -"
+    elif command -v curl >/dev/null 2>&1; then
+        fetch_cmd="curl -fsSL --connect-timeout 30 --max-time 60"
+    else
+        echo ""
+        return 1
+    fi
+    
     # 尝试使用 GitHub API 获取最新版本
-    if response=$(curl -fsSL "$api_url" 2>/dev/null); then
+    if response=$($fetch_cmd "$api_url" 2>/dev/null); then
         local latest_version=$(echo "$response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+')
         if [ -n "$latest_version" ]; then
             echo "$latest_version"
@@ -454,7 +465,7 @@ get_latest_version() {
     
     # 备用方案：解析 releases 页面
     local releases_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases"
-    if response=$(curl -fsSL "$releases_url" 2>/dev/null); then
+    if response=$($fetch_cmd "$releases_url" 2>/dev/null); then
         local latest_version=$(echo "$response" | grep -oP '/releases/tag/\K[^"]+' | head -1)
         if [ -n "$latest_version" ]; then
             echo "$latest_version"
@@ -471,7 +482,17 @@ get_available_versions() {
     local api_url="${GITHUB_API}/${GITHUB_REPO}/releases"
     local response
     
-    if response=$(curl -fsSL "$api_url" 2>/dev/null); then
+    # 支持 wget 和 curl
+    local fetch_cmd=""
+    if command -v wget >/dev/null 2>&1; then
+        fetch_cmd="wget -q -T 30 -O -"
+    elif command -v curl >/dev/null 2>&1; then
+        fetch_cmd="curl -fsSL --connect-timeout 30 --max-time 60"
+    else
+        return 1
+    fi
+    
+    if response=$($fetch_cmd "$api_url" 2>/dev/null); then
         echo "$response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+'
         return 0
     fi
@@ -497,8 +518,15 @@ validate_version() {
     
     local download_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${version}/gpanel-linux-${ARCH}.tar.gz"
     
-    if curl --output /dev/null --silent --head --fail "$download_url" 2>/dev/null; then
-        return 0
+    # 支持 wget 和 curl
+    if command -v wget >/dev/null 2>&1; then
+        if wget --spider -q -T 30 "$download_url" 2>/dev/null; then
+            return 0
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        if curl --output /dev/null --silent --head --fail --connect-timeout 30 --max-time 60 "$download_url" 2>/dev/null; then
+            return 0
+        fi
     fi
     
     return 1
@@ -529,10 +557,55 @@ EOF
 # 安装函数
 # ============================================================
 
+# 下载文件（优先 wget，备选 curl）
+# 参数: $1=URL, $2=输出文件名, $3=超时秒数(可选,默认60), $4=重试次数(可选,默认3)
+download_file() {
+    local url="$1"
+    local output="$2"
+    local timeout="${3:-60}"
+    local retries="${4:-3}"
+    local attempt=1
+    
+    while [ $attempt -le $retries ]; do
+        if [ $attempt -gt 1 ]; then
+            log_warn "重试下载 ($attempt/$retries)..."
+            sleep 2
+        fi
+        
+        # 优先使用 wget
+        if command -v wget >/dev/null 2>&1; then
+            log_info "使用 wget 下载..."
+            if wget --timeout="$timeout" --tries=1 -q --show-progress -O "$output" "$url" 2>&1; then
+                return 0
+            fi
+        # 备选 curl
+        elif command -v curl >/dev/null 2>&1; then
+            log_info "使用 curl 下载..."
+            if curl -fsSL --progress-bar --connect-timeout "$timeout" --max-time $((timeout * 10)) -o "$output" "$url" 2>&1; then
+                return 0
+            fi
+        else
+            log_error "未找到 wget 或 curl，请先安装其中一个"
+            return 1
+        fi
+        
+        ((attempt++))
+    done
+    
+    return 1
+}
+
 download_binaries() {
     local target_version=$1
     
     log_step "下载二进制文件 (版本: $target_version)..."
+    
+    # 检查下载工具
+    if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
+        log_error "未找到 wget 或 curl，请先安装其中一个"
+        log_info "安装方法: apt install wget 或 yum install wget"
+        exit 1
+    fi
     
     # 创建临时目录
     TEMP_DIR=$(mktemp -d)
@@ -545,8 +618,8 @@ download_binaries() {
     
     log_info "下载地址: $download_url"
     
-    # 下载压缩包
-    if ! curl -fsSL --progress-bar -o "$archive_name" "$download_url"; then
+    # 下载压缩包（超时120秒，重试3次）
+    if ! download_file "$download_url" "$archive_name" 120 3; then
         log_error "下载失败: $archive_name"
         log_error "请检查版本号是否正确: $target_version"
         log_error "或访问 https://github.com/${GITHUB_REPO}/releases 查看可用版本"
@@ -556,7 +629,7 @@ download_binaries() {
     log_info "下载完成: $archive_name"
     
     # 下载校验和文件（可选）
-    if curl -fsSL -o "checksums.txt" "$checksum_url" 2>/dev/null; then
+    if download_file "$checksum_url" "checksums.txt" 30 1 2>/dev/null; then
         log_info "验证文件完整性..."
         if command -v sha256sum >/dev/null 2>&1; then
             if grep -q "$archive_name" checksums.txt; then
