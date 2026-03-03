@@ -521,8 +521,8 @@ validate_version() {
     # 支持 wget 和 curl
     if command -v wget >/dev/null 2>&1; then
         if wget --spider -q -T 30 "$download_url" 2>/dev/null; then
-            return 0
-        fi
+        return 0
+    fi
     elif command -v curl >/dev/null 2>&1; then
         if curl --output /dev/null --silent --head --fail --connect-timeout 30 --max-time 60 "$download_url" 2>/dev/null; then
             return 0
@@ -823,6 +823,16 @@ print_install_success() {
         SERVER_IP="your-server-ip"
     fi
     
+    # 获取内网 IP（优先选择 192.168.x.x, 10.x.x.x, 172.16-31.x.x）
+    LOCAL_IP=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+    if [ -z "$LOCAL_IP" ]; then
+        # 备用方案：从所有 IP 中筛选内网 IP
+        LOCAL_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -1)
+    fi
+    if [ -z "$LOCAL_IP" ]; then
+        LOCAL_IP="$SERVER_IP"
+    fi
+    
     echo ""
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}安装成功！${NC}"
@@ -831,11 +841,10 @@ print_install_success() {
     echo -e "${GREEN}安装版本:${NC} $VERSION"
     echo ""
     echo -e "${GREEN}访问地址:${NC}"
-    echo "  本地访问: http://localhost:8080"
+    echo "  本地访问: http://${LOCAL_IP}:8080"
     echo "  外部访问: http://${SERVER_IP}:8080"
     echo ""
     echo -e "${GREEN}服务管理:${NC}"
-    echo "  sudo ./gpanel.sh status    # 查看状态"
     echo "  sudo ./gpanel.sh update    # 更新版本"
     echo "  sudo ./gpanel.sh uninstall # 卸载"
     echo "  sudo gpctl status          # 使用 gpctl 管理"
