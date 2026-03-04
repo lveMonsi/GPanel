@@ -1185,11 +1185,18 @@ do_install() {
     # 创建 systemd 服务
     create_systemd_services
     
+    # 在启动服务之前检测数据库是否存在（避免服务启动后自动初始化数据库导致检测失效）
+    local DB_EXISTS=false
+    if [ -f "$DATA_DIR/gpanel.db" ]; then
+        DB_EXISTS=true
+        log_info "检测到已存在的数据库，保留原有配置"
+    fi
+    
     # 启动服务
     start_services
     
     # 检测是否为全新安装（数据库不存在），如果是则初始化安全配置
-    if [ ! -f "$DATA_DIR/gpanel.db" ]; then
+    if [ "$DB_EXISTS" = false ]; then
         log_step "检测到全新安装，正在初始化安全配置..."
         
         # 等待服务完全启动并生成数据库
@@ -1226,8 +1233,6 @@ do_install() {
         else
             log_warn "数据库初始化超时，跳过安全配置"
         fi
-    else
-        log_info "检测到已存在的数据库，保留原有配置"
     fi
     
     # 配置防火墙（在安全配置之后，使用实际端口）
