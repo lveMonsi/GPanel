@@ -2,9 +2,6 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
-// Monaco Editor Worker 前缀路径
-const monacoPrefix = 'monaco-editor/esm/vs'
-
 export default defineConfig({
   plugins: [vue()],
   base: '/', // 使用根路径，配合后端处理
@@ -37,36 +34,7 @@ export default defineConfig({
       output: {
         // 细粒度代码分割
         manualChunks(id) {
-          // Monaco Editor Workers - 单独打包
-          if (id.includes(`${monacoPrefix}/language/json/json.worker`)) {
-            return 'monaco-json-worker'
-          }
-          if (id.includes(`${monacoPrefix}/language/css/css.worker`)) {
-            return 'monaco-css-worker'
-          }
-          if (id.includes(`${monacoPrefix}/language/html/html.worker`)) {
-            return 'monaco-html-worker'
-          }
-          if (id.includes(`${monacoPrefix}/language/typescript/ts.worker`)) {
-            return 'monaco-ts-worker'
-          }
-          if (id.includes(`${monacoPrefix}/editor/editor.worker`)) {
-            return 'monaco-editor-worker'
-          }
-          // Monaco Editor 核心模块拆分
-          if (id.includes(`${monacoPrefix}/base/`)) {
-            return 'monaco-base'
-          }
-          if (id.includes(`${monacoPrefix}/editor/`)) {
-            return 'monaco-editor-core'
-          }
-          if (id.includes(`${monacoPrefix}/platform/`)) {
-            return 'monaco-platform'
-          }
-          if (id.includes(`${monacoPrefix}/language/`)) {
-            return 'monaco-language'
-          }
-          // Monaco Editor 其他部分
+          // Monaco Editor - 整体打包，避免循环依赖问题
           if (id.includes('node_modules/monaco-editor/')) {
             return 'monaco-editor'
           }
@@ -97,7 +65,11 @@ export default defineConfig({
     assetsInlineLimit: 4096,
     // 源码映射（生产环境关闭）
     sourcemap: false,
-    // 关闭 CSS 代码分割可减少构建内存
+    // CSS 代码分割
     cssCodeSplit: true,
-  }
+  },
+  // 优化依赖预构建
+  optimizeDeps: {
+    include: ['monaco-editor'],
+  },
 })
