@@ -95,6 +95,7 @@ func (s *SettingService) InitializeDefaultSettings() error {
 		"ServerAddress":            {"", "服务器地址"},
 		"ListenAddress":            {"0.0.0.0", "监听地址"},
 		"PasswordComplexityCheck":  {"false", "密码复杂度验证"},
+		"AgentAddress":             {"localhost:9998", "Agent 服务地址"},
 	}
 
 	for key, setting := range defaultSettings {

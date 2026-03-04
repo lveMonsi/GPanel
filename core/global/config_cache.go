@@ -188,6 +188,13 @@ func (cc *ConfigCache) GetPasswordComplexityCheck() bool {
 	return false
 }
 
+func (cc *ConfigCache) GetAgentAddress() string {
+	if address, exists := cc.Get("AgentAddress"); exists {
+		return address
+	}
+	return "localhost:9998"
+}
+
 // NewSettingRepo 创建 SettingRepo 实例（避免循环导入）
 func NewSettingRepo() interface {
 	List() ([]Setting, error)

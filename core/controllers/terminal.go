@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"gpanel/global"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -36,16 +38,25 @@ func NewTerminalController() (*TerminalController, error) {
 	return &TerminalController{}, nil
 }
 
+// getAgentWSBaseURL 获取 Agent WebSocket 基础 URL
+func (tc *TerminalController) getAgentWSBaseURL() string {
+	agentAddr := "localhost:9998"
+	if global.ConfigCacheInstance != nil {
+		agentAddr = global.ConfigCacheInstance.GetAgentAddress()
+	}
+	return "ws://" + agentAddr
+}
+
 // TerminalLocal 本地终端 WebSocket 代理
 // GET /api/v1/terminal/local?cols=120&rows=30
 func (tc *TerminalController) TerminalLocal(c *gin.Context) {
-	tc.proxyWebSocket(c, "ws://localhost:9998/api/v1/terminal/local")
+	tc.proxyWebSocket(c, tc.getAgentWSBaseURL()+"/api/v1/terminal/local")
 }
 
 // TerminalSSH SSH 终端 WebSocket 代理
 // GET /api/v1/terminal/ssh?cols=120&rows=30
 func (tc *TerminalController) TerminalSSH(c *gin.Context) {
-	tc.proxyWebSocket(c, "ws://localhost:9998/api/v1/terminal/ssh")
+	tc.proxyWebSocket(c, tc.getAgentWSBaseURL()+"/api/v1/terminal/ssh")
 }
 
 // proxyWebSocket WebSocket 代理

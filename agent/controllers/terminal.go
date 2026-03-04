@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gpanel/agent/dto"
+	"gpanel/agent/global"
 	"gpanel/agent/utils/ssh"
 	"gpanel/agent/utils/terminal"
 
@@ -21,18 +22,21 @@ var upGrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 16384,
 	CheckOrigin: func(r *http.Request) bool {
-		// 只允许同源或配置的域名
+		// 获取动态配置的允许来源
+		allowedOrigins := global.GetAllowedOrigins()
 		origin := r.Header.Get("Origin")
-		allowedOrigins := []string{
-			"http://localhost:5173",
-			"http://localhost:5174",
-			"http://localhost:3000",
-			"http://localhost:8080",
+		
+		// 如果没有配置允许的 origins，则允许所有来源
+		if len(allowedOrigins) == 0 {
+			return true
 		}
+		
 		// 允许空 origin（某些浏览器或代理可能不发送）
 		if origin == "" {
 			return true
 		}
+		
+		// 检查 origin 是否在允许列表中
 		for _, allowed := range allowedOrigins {
 			if origin == allowed {
 				return true

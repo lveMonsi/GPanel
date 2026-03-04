@@ -11,13 +11,13 @@ import (
 	"os"
 	"runtime"
 	"time"
+
+	"gpanel/global"
 )
 
 const (
 	// AgentSocketPath Agent Unix Domain Socket 路径
 	AgentSocketPath = "/var/run/gpanel/agent.sock"
-	// AgentHTTPAddress Agent HTTP 地址（用于非Unix系统）
-	AgentHTTPAddress = "http://localhost:9998"
 	// DefaultTimeout 默认超时时间
 	DefaultTimeout = 30 * time.Second
 )
@@ -55,8 +55,13 @@ func NewAgentClient() (*AgentClient, error) {
 
 	// 如果 Unix Domain Socket 不可用，使用 HTTP
 	if client == nil {
+		// 从配置缓存获取 Agent 地址
+		agentAddr := "localhost:9998"
+		if global.ConfigCacheInstance != nil {
+			agentAddr = global.ConfigCacheInstance.GetAgentAddress()
+		}
 		client = &AgentClient{
-			baseURL: AgentHTTPAddress,
+			baseURL: "http://" + agentAddr,
 			httpClient: &http.Client{
 				Timeout: DefaultTimeout,
 			},

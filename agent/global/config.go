@@ -4,15 +4,17 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // 全局配置变量（带默认值）
 var (
-	ServerMode = "release"
-	ListenAddr = "0.0.0.0:9998"
-	LogLevel   = "info"
-	LogFile    = "/var/log/gpanel/agent.log"
-	DataDir    = "/var/lib/gpanel"
+	ServerMode      = "release"
+	ListenAddr      = "0.0.0.0:9998"
+	LogLevel        = "info"
+	LogFile         = "/var/log/gpanel/agent.log"
+	DataDir         = "/var/lib/gpanel"
+	AllowedOrigins  = []string{} // 允许的 WebSocket Origins，为空时允许所有
 )
 
 // InitConfig 初始化配置
@@ -34,10 +36,20 @@ func InitConfig() error {
 	if dataDir := os.Getenv("GAGENT_DATA_DIR"); dataDir != "" {
 		DataDir = dataDir
 	}
+	// 读取允许的 Origins（逗号分隔）
+	if origins := os.Getenv("GAGENT_ALLOWED_ORIGINS"); origins != "" {
+		AllowedOrigins = strings.Split(origins, ",")
+		for i, o := range AllowedOrigins {
+			AllowedOrigins[i] = strings.TrimSpace(o)
+		}
+	}
 
 	log.Printf("Server mode: %s", ServerMode)
 	log.Printf("Listen address: %s", ListenAddr)
 	log.Printf("Data directory: %s", DataDir)
+	if len(AllowedOrigins) > 0 {
+		log.Printf("Allowed origins: %v", AllowedOrigins)
+	}
 
 	return nil
 }
@@ -60,6 +72,11 @@ func GetLogLevel() string {
 // GetLogFile 获取日志文件路径
 func GetLogFile() string {
 	return LogFile
+}
+
+// GetAllowedOrigins 获取允许的 WebSocket Origins
+func GetAllowedOrigins() []string {
+	return AllowedOrigins
 }
 
 // GetDataDir 获取数据目录
