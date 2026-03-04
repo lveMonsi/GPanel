@@ -413,7 +413,7 @@ func (s *HostService) ImportHosts(hosts []dto.HostOperate) (int, int, error) {
 		importHost := host
 		if host.AuthMode == "password" && host.Password != "" {
 			// 尝试解密，判断是否已加密
-			decrypted, err := encrypt.StringDecrypt(host.Password)
+			_, err := encrypt.StringDecrypt(host.Password)
 			if err != nil {
 				// 解密失败，说明是明文，需要加密存储
 				encrypted, err := encrypt.StringEncrypt(host.Password)
@@ -426,7 +426,7 @@ func (s *HostService) ImportHosts(hosts []dto.HostOperate) (int, int, error) {
 			}
 		} else if host.AuthMode == "key" {
 			if host.PrivateKey != "" {
-				decrypted, err := encrypt.StringDecrypt(host.PrivateKey)
+				_, err := encrypt.StringDecrypt(host.PrivateKey)
 				if err != nil {
 					// 明文，需要加密
 					encrypted, err := encrypt.StringEncrypt(host.PrivateKey)
@@ -439,7 +439,7 @@ func (s *HostService) ImportHosts(hosts []dto.HostOperate) (int, int, error) {
 				}
 			}
 			if host.PassPhrase != "" {
-				decrypted, err := encrypt.StringDecrypt(host.PassPhrase)
+				_, err := encrypt.StringDecrypt(host.PassPhrase)
 				if err != nil {
 					// 明文，需要加密
 					encrypted, err := encrypt.StringEncrypt(host.PassPhrase)
