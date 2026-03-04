@@ -46,7 +46,7 @@
         </el-table-column>
         <el-table-column prop="usedStatus" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.usedStatus === 'used' ? 'success' : 'info'" size="small">
+            <el-tag :type="row.usedStatus === 'used' ? 'info' : 'success'" size="small">
               {{ row.usedStatus === 'used' ? '已占用' : '未占用' }}
             </el-tag>
           </template>

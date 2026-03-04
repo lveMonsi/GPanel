@@ -57,6 +57,13 @@ func (i *IptablesClient) Version() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// 解析版本号，格式: "iptables v1.8.7 (nf_tables)"
+	fields := strings.Fields(output)
+	if len(fields) >= 2 {
+		// 移除 v 前缀
+		version := strings.TrimPrefix(fields[1], "v")
+		return version, nil
+	}
 	return strings.TrimSpace(output), nil
 }
 

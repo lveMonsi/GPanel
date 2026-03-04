@@ -62,6 +62,11 @@ func (u *UfwClient) Version() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// 解析版本号，格式: "ufw 0.36.2 Copyright 2008-2023 Canonical Ltd."
+	fields := strings.Fields(output)
+	if len(fields) >= 2 {
+		return fields[1], nil
+	}
 	return strings.TrimSpace(output), nil
 }
 
