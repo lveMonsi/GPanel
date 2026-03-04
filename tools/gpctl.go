@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,6 +55,8 @@ func main() {
 		handleUninstall()
 	case "user-info":
 		handleUserInfo()
+	case "update":
+		handleUpdate()
 	case "init-security":
 		handleInitSecurity()
 	case "get-port":
@@ -95,6 +96,10 @@ func printUsage() {
 	fmt.Println("  restart             重启 GPanel 服务 (包括 agent)")
 	fmt.Println("  uninstall           卸载 GPanel 服务")
 	fmt.Println("  user-info           获取 GPanel 用户信息")
+	fmt.Println("  update              更新 GPanel 配置")
+	fmt.Println("    update password   更新面板密码")
+	fmt.Println("    update port       更新面板端口")
+	fmt.Println("    update username   更新面板用户名")
 	fmt.Println("  init-security       初始化安全配置（随机端口和安全入口）")
 	fmt.Println("    init-security           随机生成端口和安全入口")
 	fmt.Println("    init-security --port N  指定端口，随机安全入口")
@@ -516,63 +521,250 @@ func handleUninstall() {
 }
 
 func handleUserInfo() {
-	fmt.Println("=== GPanel 配置信息 ===")
-	fmt.Println()
-
-	// 检查数据库文件
-	if fileExists(dbPath) {
-		fmt.Printf("数据库文件: %s\n", dbPath)
-	} else {
-		fmt.Printf("数据库文件不存在: %s\n", dbPath)
-	}
-
-	// 服务状态
-	fmt.Println()
-	fmt.Println("=== 服务状态 ===")
-	for _, svc := range services {
-		if isServiceRunning(svc) {
-			fmt.Printf("✓ %s: 运行中\n", svc)
-		} else {
-			fmt.Printf("✗ %s: 未运行\n", svc)
-		}
-	}
-
 	// 加载配置
-	if err := loadConfig(); err == nil {
-		fmt.Println()
-		fmt.Println("=== 配置信息 ===")
-		port := getConfig("ServerPort", "8080")
-		securityEntrance := getConfig("SecurityEntrance", "/")
-		listenAddress := getConfig("ListenAddress", "0.0.0.0")
+	if err := loadConfig(); err != nil {
+		fmt.Printf("无法加载配置: %v\n", err)
+		os.Exit(1)
+	}
 
-		fmt.Printf("  监听地址: %s:%s\n", listenAddress, port)
+	port := getConfig("ServerPort", "8080")
+	securityEntrance := getConfig("SecurityEntrance", "/")
+	username := getConfig("PanelUser", "admin")
+	password := getConfig("PanelPassword", "admin123")
 
-		if securityEntrance != "/" {
-			fmt.Printf("  安全入口: %s\n", securityEntrance)
-			fmt.Println()
-			fmt.Printf("  访问地址: http(s)://你的IP:%s%s\n", port, securityEntrance)
-		} else {
-			fmt.Println("  安全入口: 未设置 (/)")
-			fmt.Println()
-			fmt.Printf("  访问地址: http(s)://你的IP:%s\n", port)
-		}
+	// 获取服务器 IP
+	serverIP := getServerIP()
+
+	// 构建访问地址
+	var address string
+	if securityEntrance != "/" {
+		address = fmt.Sprintf("https://%s:%s%s", serverIP, port, securityEntrance)
 	} else {
-		fmt.Printf("\n无法加载配置: %v\n", err)
+		address = fmt.Sprintf("https://%s:%s", serverIP, port)
 	}
 
-	// 尝试从 API 获取信息
-	port := "8080"
-	if configCache != nil {
-		port = getConfig("ServerPort", "8080")
+	// 隐藏密码（显示星号）
+	maskedPassword := strings.Repeat("*", len(password))
+
+	// 输出用户信息
+	fmt.Printf("Panel address: %s\n", address)
+	fmt.Printf("Panel user: %s\n", username)
+	fmt.Printf("Panel password: %s\n", maskedPassword)
+	fmt.Println("Tip: To change the password, you can execute the command: gpctl update password")
+}
+
+// handleUpdate 处理 update 命令
+func handleUpdate() {
+	if !isRoot() {
+		fmt.Println("错误: 需要 root 权限")
+		os.Exit(1)
 	}
-	url := fmt.Sprintf("http://localhost:%s/api/v1/config", port)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
-	if err == nil && resp.StatusCode == 200 {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("\n=== API 响应 ===\n%s\n", string(body))
+
+	if len(os.Args) < 3 {
+		fmt.Println("请指定更新选项:")
+		fmt.Println("  gpctl update password  更新面板密码")
+		fmt.Println("  gpctl update port      更新面板端口")
+		fmt.Println("  gpctl update username  更新面板用户名")
+		os.Exit(1)
 	}
+
+	subCommand := os.Args[2]
+
+	switch subCommand {
+	case "password":
+		updatePassword()
+	case "port":
+		updatePort()
+	case "username":
+		updateUsername()
+	default:
+		fmt.Printf("未知的更新选项: %s\n", subCommand)
+		fmt.Println("可用选项: password, port, username")
+		os.Exit(1)
+	}
+}
+
+// updatePassword 更新面板密码
+func updatePassword() {
+	if err := loadConfig(); err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	currentPassword := getConfig("PanelPassword", "admin123")
+
+	fmt.Println("=== 更新面板密码 ===")
+	fmt.Println()
+
+	// 读取当前密码
+	fmt.Print("请输入当前密码: ")
+	reader := bufio.NewReader(os.Stdin)
+	currentInput, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("读取输入失败: %v\n", err)
+		os.Exit(1)
+	}
+	currentInput = strings.TrimSpace(currentInput)
+
+	// 验证当前密码
+	if currentInput != currentPassword {
+		fmt.Println("错误: 当前密码不正确")
+		os.Exit(1)
+	}
+
+	// 读取新密码
+	fmt.Print("请输入新密码: ")
+	newPassword, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("读取输入失败: %v\n", err)
+		os.Exit(1)
+	}
+	newPassword = strings.TrimSpace(newPassword)
+
+	if newPassword == "" {
+		fmt.Println("错误: 密码不能为空")
+		os.Exit(1)
+	}
+
+	if len(newPassword) < 6 {
+		fmt.Println("错误: 密码长度至少为 6 个字符")
+		os.Exit(1)
+	}
+
+	// 确认新密码
+	fmt.Print("请再次输入新密码: ")
+	confirmPassword, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("读取输入失败: %v\n", err)
+		os.Exit(1)
+	}
+	confirmPassword = strings.TrimSpace(confirmPassword)
+
+	if newPassword != confirmPassword {
+		fmt.Println("错误: 两次输入的密码不一致")
+		os.Exit(1)
+	}
+
+	// 更新密码
+	if err := updateConfig("PanelPassword", newPassword); err != nil {
+		fmt.Printf("更新密码失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("✓ 密码已更新")
+	fmt.Println("提示: 重新登录后生效")
+}
+
+// updatePort 更新面板端口
+func updatePort() {
+	if err := loadConfig(); err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	currentPort := getConfig("ServerPort", "8080")
+
+	fmt.Println("=== 更新面板端口 ===")
+	fmt.Println()
+	fmt.Printf("当前端口: %s\n", currentPort)
+	fmt.Println()
+
+	// 读取新端口
+	fmt.Print("请输入新端口 (1-65535): ")
+	reader := bufio.NewReader(os.Stdin)
+	portInput, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("读取输入失败: %v\n", err)
+		os.Exit(1)
+	}
+	portInput = strings.TrimSpace(portInput)
+
+	// 验证端口
+	var newPort int
+	if _, err := fmt.Sscanf(portInput, "%d", &newPort); err != nil {
+		fmt.Println("错误: 请输入有效的端口号")
+		os.Exit(1)
+	}
+
+	if newPort < 1 || newPort > 65535 {
+		fmt.Println("错误: 端口号必须在 1-65535 范围内")
+		os.Exit(1)
+	}
+
+	if portInput == currentPort {
+		fmt.Println("新端口与当前端口相同，无需更新")
+		return
+	}
+
+	// 更新端口
+	if err := updateConfig("ServerPort", portInput); err != nil {
+		fmt.Printf("更新端口失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ 端口已更新: %s\n", portInput)
+
+	// 重启服务使配置生效
+	fmt.Println("正在重启服务...")
+	restartServices()
+
+	// 显示新的访问地址
+	securityEntrance := getConfig("SecurityEntrance", "/")
+	serverIP := getServerIP()
+	if securityEntrance != "/" {
+		fmt.Printf("\n访问地址: https://%s:%s%s\n", serverIP, portInput, securityEntrance)
+	} else {
+		fmt.Printf("\n访问地址: https://%s:%s\n", serverIP, portInput)
+	}
+}
+
+// updateUsername 更新面板用户名
+func updateUsername() {
+	if err := loadConfig(); err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	currentUsername := getConfig("PanelUser", "admin")
+
+	fmt.Println("=== 更新面板用户名 ===")
+	fmt.Println()
+	fmt.Printf("当前用户名: %s\n", currentUsername)
+	fmt.Println()
+
+	// 读取新用户名
+	fmt.Print("请输入新用户名: ")
+	reader := bufio.NewReader(os.Stdin)
+	newUsername, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("读取输入失败: %v\n", err)
+		os.Exit(1)
+	}
+	newUsername = strings.TrimSpace(newUsername)
+
+	if newUsername == "" {
+		fmt.Println("错误: 用户名不能为空")
+		os.Exit(1)
+	}
+
+	if len(newUsername) < 3 {
+		fmt.Println("错误: 用户名长度至少为 3 个字符")
+		os.Exit(1)
+	}
+
+	if newUsername == currentUsername {
+		fmt.Println("新用户名与当前用户名相同，无需更新")
+		return
+	}
+
+	// 更新用户名
+	if err := updateConfig("PanelUser", newUsername); err != nil {
+		fmt.Printf("更新用户名失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ 用户名已更新: %s\n", newUsername)
+	fmt.Println("提示: 重新登录后生效")
 }
 
 // handleReset 处理 reset 命令
@@ -977,8 +1169,9 @@ func dirExists(path string) bool {
 // handleInitSecurity 处理 init-security 命令
 // 功能：初始化安全配置（随机端口和安全入口）
 // 参数：
-//   --port N   指定端口
-//   --show     仅显示当前连接信息
+//
+//	--port N   指定端口
+//	--show     仅显示当前连接信息
 func handleInitSecurity() {
 	if !isRoot() {
 		fmt.Println("错误: 需要 root 权限")
@@ -1057,8 +1250,9 @@ func handleInitSecurity() {
 // handleGetPort 处理 get-port 命令
 // 功能：获取服务端口
 // 参数：
-//   core/agent  指定服务
-//   --quiet     静默输出（仅输出端口号）
+//
+//	core/agent  指定服务
+//	--quiet     静默输出（仅输出端口号）
 func handleGetPort() {
 	// 解析参数
 	quiet := false
@@ -1105,7 +1299,8 @@ func handleGetPort() {
 // handleGetEntrance 处理 get-entrance 命令
 // 功能：获取安全入口
 // 参数：
-//   --quiet     静默输出（仅输出安全入口路径）
+//
+//	--quiet     静默输出（仅输出安全入口路径）
 func handleGetEntrance() {
 	// 解析参数
 	quiet := false
