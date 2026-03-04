@@ -203,6 +203,7 @@
                 <div class="about-item">
                   <div class="about-label">GPanel</div>
                   <div class="about-value">服务器管理面板</div>
+                  <a href="https://github.com/lveMonsi/GPanel" target="_blank" rel="noopener noreferrer">源码仓库</a>
                 </div>
               </div>
             </div>

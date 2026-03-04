@@ -33,7 +33,7 @@ type IHostService interface {
 	ListHosts(req dto.HostSearch) ([]dto.HostInfo, int64, error)
 	TestConnection(req dto.HostConnTest) error
 	MoveHosts(req dto.HostMove) error
-	ExportHosts() ([]dto.HostOperate, error)
+	ExportHosts(encrypted bool) ([]dto.HostOperate, error)
 	ImportHosts(hosts []dto.HostOperate) (int, int, error)
 }
 
@@ -334,7 +334,7 @@ func (s *HostService) MoveHosts(req dto.HostMove) error {
 }
 
 // ExportHosts 导出主机列表
-func (s *HostService) ExportHosts() ([]dto.HostOperate, error) {
+func (s *HostService) ExportHosts(encrypted bool) ([]dto.HostOperate, error) {
 	hosts, err := s.hostRepo.ListHosts()
 	if err != nil {
 		return nil, err
@@ -342,7 +342,7 @@ func (s *HostService) ExportHosts() ([]dto.HostOperate, error) {
 
 	var result []dto.HostOperate
 	for _, host := range hosts {
-		result = append(result, dto.HostOperate{
+		exportHost := dto.HostOperate{
 			ID:               host.ID,
 			GroupID:          host.GroupID,
 			Name:             host.Name,
@@ -352,8 +352,44 @@ func (s *HostService) ExportHosts() ([]dto.HostOperate, error) {
 			AuthMode:         host.AuthMode,
 			RememberPassword: host.RememberPassword,
 			Description:      host.Description,
-			// 不导出密码和密钥
-		})
+		}
+
+		// 处理敏感信息
+		if host.AuthMode == "password" && host.Password != "" {
+			decrypted, err := encrypt.StringDecrypt(host.Password)
+			if err == nil {
+				if encrypted {
+					// 加密导出：使用加密后的值
+					exportHost.Password = host.Password
+				} else {
+					// 明文导出：使用解密后的值
+					exportHost.Password = decrypted
+				}
+			}
+		} else if host.AuthMode == "key" {
+			if host.PrivateKey != "" {
+				decrypted, err := encrypt.StringDecrypt(host.PrivateKey)
+				if err == nil {
+					if encrypted {
+						exportHost.PrivateKey = host.PrivateKey
+					} else {
+						exportHost.PrivateKey = decrypted
+					}
+				}
+			}
+			if host.PassPhrase != "" {
+				decrypted, err := encrypt.StringDecrypt(host.PassPhrase)
+				if err == nil {
+					if encrypted {
+						exportHost.PassPhrase = host.PassPhrase
+					} else {
+						exportHost.PassPhrase = decrypted
+					}
+				}
+			}
+		}
+
+		result = append(result, exportHost)
 	}
 	return result, nil
 }
@@ -373,9 +409,66 @@ func (s *HostService) ImportHosts(hosts []dto.HostOperate) (int, int, error) {
 			}
 		}
 
-		// 创建新主机
-		_, err = s.CreateHost(host)
-		if err != nil {
+		// 处理敏感信息：尝试解密，如果失败则认为是明文，需要加密存储
+		importHost := host
+		if host.AuthMode == "password" && host.Password != "" {
+			// 尝试解密，判断是否已加密
+			decrypted, err := encrypt.StringDecrypt(host.Password)
+			if err != nil {
+				// 解密失败，说明是明文，需要加密存储
+				encrypted, err := encrypt.StringEncrypt(host.Password)
+				if err == nil {
+					importHost.Password = encrypted
+				}
+			} else {
+				// 解密成功，说明已加密，直接使用原值（已经是加密状态）
+				importHost.Password = host.Password
+			}
+		} else if host.AuthMode == "key" {
+			if host.PrivateKey != "" {
+				decrypted, err := encrypt.StringDecrypt(host.PrivateKey)
+				if err != nil {
+					// 明文，需要加密
+					encrypted, err := encrypt.StringEncrypt(host.PrivateKey)
+					if err == nil {
+						importHost.PrivateKey = encrypted
+					}
+				} else {
+					// 已加密
+					importHost.PrivateKey = host.PrivateKey
+				}
+			}
+			if host.PassPhrase != "" {
+				decrypted, err := encrypt.StringDecrypt(host.PassPhrase)
+				if err != nil {
+					// 明文，需要加密
+					encrypted, err := encrypt.StringEncrypt(host.PassPhrase)
+					if err == nil {
+						importHost.PassPhrase = encrypted
+					}
+				} else {
+					// 已加密
+					importHost.PassPhrase = host.PassPhrase
+				}
+			}
+		}
+
+		// 创建新主机（不再通过 CreateHost，因为它会再次加密）
+		hostModel := &models.Host{
+			GroupID:          importHost.GroupID,
+			Name:             importHost.Name,
+			Addr:             importHost.Addr,
+			Port:             importHost.Port,
+			User:             importHost.User,
+			AuthMode:         importHost.AuthMode,
+			Password:         importHost.Password,
+			PrivateKey:       importHost.PrivateKey,
+			PassPhrase:       importHost.PassPhrase,
+			RememberPassword: importHost.RememberPassword,
+			Description:      importHost.Description,
+		}
+
+		if err := s.hostRepo.CreateHost(hostModel); err != nil {
 			failCount++
 		} else {
 			successCount++

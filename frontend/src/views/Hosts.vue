@@ -151,6 +151,33 @@
         <el-button type="primary" @click="handleConfirmMove">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 导出确认对话框 -->
+    <el-dialog
+      v-model="exportDialogVisible"
+      title="导出主机配置"
+      width="450px"
+    >
+      <div class="export-options">
+        <el-checkbox v-model="exportEncrypted">
+          加密导出敏感信息（密码、密钥等）
+        </el-checkbox>
+        <div class="export-tips">
+          <p v-if="exportEncrypted">
+            <el-icon><InfoFilled /></el-icon>
+            敏感信息会以加密形式存储，导入时自动解密
+          </p>
+          <p v-else>
+            <el-icon><WarningFilled /></el-icon>
+            敏感信息以明文存储，便于查看和跨平台迁移，但请注意安全
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="exportDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleConfirmExport">确定导出</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -166,7 +193,9 @@ import {
   Edit,
   Delete,
   Download,
-  Upload
+  Upload,
+  InfoFilled,
+  WarningFilled
 } from '@element-plus/icons-vue'
 import {
   listHosts,
@@ -341,9 +370,17 @@ const handleConfirmMove = async () => {
   }
 }
 
-const handleExport = async () => {
+const exportDialogVisible = ref(false)
+const exportEncrypted = ref(true)
+
+const handleExport = () => {
+  exportEncrypted.value = true
+  exportDialogVisible.value = true
+}
+
+const handleConfirmExport = async () => {
   try {
-    const res = await exportHosts()
+    const res = await exportHosts(exportEncrypted.value)
     const dataStr = JSON.stringify(res.data, null, 2)
     const dataBlob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(dataBlob)
@@ -353,6 +390,7 @@ const handleExport = async () => {
     link.click()
     URL.revokeObjectURL(url)
     ElMessage.success('导出成功')
+    exportDialogVisible.value = false
   } catch (error) {
     console.error('导出失败:', error)
     ElMessage.error('导出失败')
@@ -445,5 +483,33 @@ onMounted(() => {
     transform: translateX(-50%) translateY(0);
     opacity: 1;
   }
+}
+
+.export-options {
+  padding: 10px 0;
+}
+
+.export-options .el-checkbox {
+  font-size: 14px;
+}
+
+.export-tips {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+
+.export-tips p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.export-tips .el-icon {
+  font-size: 14px;
 }
 </style>

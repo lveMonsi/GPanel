@@ -380,10 +380,17 @@ func GetHostForTerminal(c *gin.Context) {
 // @Summary 导出主机列表
 // @Tags Host
 // @Produce json
+// @Param encrypted query bool false "是否加密导出敏感信息" default(true)
 // @Success 200 {array} dto.HostOperate
 // @Router /api/v1/hosts/export [get]
 func ExportHosts(c *gin.Context) {
-	hosts, err := hostService.ExportHosts()
+	// 默认加密导出
+	encrypted := true
+	if encryptedStr := c.Query("encrypted"); encryptedStr == "false" {
+		encrypted = false
+	}
+
+	hosts, err := hostService.ExportHosts(encrypted)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

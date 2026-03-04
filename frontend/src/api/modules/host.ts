@@ -74,8 +74,10 @@ export const getHostForTerminal = (id: number) => {
   return http.get<HostConnInfo>(`/api/v1/hosts/${id}/connection`)
 }
 
-export const exportHosts = () => {
-  return http.get<HostOperate[]>('/api/v1/hosts/export')
+export const exportHosts = (encrypted: boolean = true) => {
+  return http.get<HostOperate[]>('/api/v1/hosts/export', {
+    params: { encrypted },
+  })
 }
 
 export const importHosts = (data: HostOperate[]) => {

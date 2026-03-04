@@ -100,3 +100,8 @@ type HostMove struct {
 	HostIDs []uint `json:"hostIDs" binding:"required"`
 	GroupID uint   `json:"groupID" binding:"required"`
 }
+
+// ExportRequest 导出请求参数
+type ExportRequest struct {
+	Encrypted bool `json:"encrypted" form:"encrypted"` // 是否加密导出敏感信息，默认 true
+}
