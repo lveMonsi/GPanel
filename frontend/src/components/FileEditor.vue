@@ -367,7 +367,12 @@ const languages = [
 // 换行符选项 - 使用数值常量 (LF=0, CRLF=1)
 const EOL_LF = 0;
 const EOL_CRLF = 1;
+// 换行符选项 - 使用数值常量 (LF=0, CRLF=1)
+const EOL_LF = 0;
+const EOL_CRLF = 1;
 const eols = [
+  { label: 'LF (Linux/macOS)', value: EOL_LF },
+  { label: 'CRLF (Windows)', value: EOL_CRLF },
   { label: 'LF (Linux/macOS)', value: EOL_LF },
   { label: 'CRLF (Windows)', value: EOL_CRLF },
 ];
@@ -383,12 +388,14 @@ const isMobile = ref(false);
 // 编辑器相关
 const editorContainer = ref<HTMLElement | null>(null);
 const editor = shallowRef<any>(null);
+const editor = shallowRef<any>(null);
 const cursorPosition = ref({ line: 1, column: 1 });
 
 // 编辑器配置
 const config = ref({
   theme: localStorage.getItem(STORAGE_KEYS.THEME) || 'vs-dark',
   language: 'plaintext',
+  eol: EOL_LF,
   eol: EOL_LF,
   wordWrap: (localStorage.getItem(STORAGE_KEYS.WORD_WRAP) as 'on' | 'off') || 'on',
   minimap: localStorage.getItem(STORAGE_KEYS.MINIMAP) !== 'false',
@@ -486,7 +493,44 @@ const getFileName = (filePath: string): string => {
 
 // ==================== 编辑器操作 ====================
 const initEditor = async () => {
+const initEditor = async () => {
   if (!editorContainer.value) return;
+  
+  // 动态加载 Monaco Editor
+  if (!monaco) {
+    try {
+      monaco = await import('monaco-editor');
+      
+      // 配置 Worker
+      const editorWorkerModule = await import('monaco-editor/esm/vs/editor/editor.worker?worker');
+      const jsonWorkerModule = await import('monaco-editor/esm/vs/language/json/json.worker?worker');
+      const cssWorkerModule = await import('monaco-editor/esm/vs/language/css/css.worker?worker');
+      const htmlWorkerModule = await import('monaco-editor/esm/vs/language/html/html.worker?worker');
+      const tsWorkerModule = await import('monaco-editor/esm/vs/language/typescript/ts.worker?worker');
+      
+      (self as any).MonacoEnvironment = {
+        getWorker(_: any, label: string) {
+          if (label === 'json') {
+            return new jsonWorkerModule.default();
+          }
+          if (label === 'css' || label === 'scss' || label === 'less') {
+            return new cssWorkerModule.default();
+          }
+          if (label === 'html' || label === 'handlebars' || label === 'razor') {
+            return new htmlWorkerModule.default();
+          }
+          if (label === 'typescript' || label === 'javascript') {
+            return new tsWorkerModule.default();
+          }
+          return new editorWorkerModule.default();
+        },
+      };
+    } catch (err) {
+      console.error('Failed to load Monaco Editor:', err);
+      ElMessage.error('编辑器加载失败');
+      return;
+    }
+  }
   
   // 动态加载 Monaco Editor
   if (!monaco) {
@@ -532,7 +576,9 @@ const initEditor = async () => {
 
   nextTick(() => {
     if (!editorContainer.value || !monaco) return;
+    if (!editorContainer.value || !monaco) return;
     
+    editor.value = monaco!.editor.create(editorContainer.value, {
     editor.value = monaco!.editor.create(editorContainer.value, {
       value: currentFile.value?.content || '',
       language: config.value.language,
@@ -572,6 +618,7 @@ const initEditor = async () => {
 
     // 监听光标位置
     editor.value.onDidChangeCursorPosition((e: any) => {
+    editor.value.onDidChangeCursorPosition((e: any) => {
       cursorPosition.value = {
         line: e.position.lineNumber,
         column: e.position.column,
@@ -592,11 +639,14 @@ const updateEditorContent = () => {
   if (model) {
     model.setValue(currentFile.value.content);
     monaco!.editor.setModelLanguage(model, currentFile.value.language);
+    monaco!.editor.setModelLanguage(model, currentFile.value.language);
     
     // 检测换行符
     if (currentFile.value.content.includes('\r\n')) {
       config.value.eol = EOL_CRLF;
+      config.value.eol = EOL_CRLF;
     } else {
+      config.value.eol = EOL_LF;
       config.value.eol = EOL_LF;
     }
     model.setEOL(config.value.eol);
@@ -874,11 +924,15 @@ const changeTheme = (theme: string) => {
   if (monaco) {
     monaco.editor.setTheme(theme);
   }
+  if (monaco) {
+    monaco.editor.setTheme(theme);
+  }
   localStorage.setItem(STORAGE_KEYS.THEME, theme);
 };
 
 const changeLanguage = (language: string) => {
   config.value.language = language;
+  if (editor.value && monaco) {
   if (editor.value && monaco) {
     const model = editor.value.getModel();
     if (model) {
