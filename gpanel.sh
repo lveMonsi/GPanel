@@ -132,6 +132,67 @@ check_arch() {
 }
 
 # ============================================================
+# 端口获取函数
+# ============================================================
+
+# 获取 Core 服务实际端口
+get_core_port() {
+    # 默认端口
+    local default_port="8080"
+    
+    # 如果 gpctl 已安装，尝试获取实际端口
+    if command -v gpctl >/dev/null 2>&1; then
+        local port=$(gpctl get-port core --quiet 2>/dev/null)
+        if [ -n "$port" ] && [ "$port" != "" ]; then
+            echo "$port"
+            return 0
+        fi
+    fi
+    
+    echo "$default_port"
+}
+
+# 获取 Agent 服务实际端口
+get_agent_port() {
+    # 默认端口
+    local default_port="9998"
+    
+    # 如果 gpctl 已安装，尝试获取实际端口
+    if command -v gpctl >/dev/null 2>&1; then
+        local port=$(gpctl get-port agent --quiet 2>/dev/null)
+        if [ -n "$port" ] && [ "$port" != "" ]; then
+            echo "$port"
+            return 0
+        fi
+    fi
+    
+    echo "$default_port"
+}
+
+# 获取安全入口
+get_security_entrance() {
+    # 默认安全入口
+    local default_entrance="/"
+    
+    # 如果 gpctl 已安装，尝试获取实际安全入口
+    if command -v gpctl >/dev/null 2>&1; then
+        local entrance=$(gpctl get-entrance --quiet 2>/dev/null)
+        if [ -n "$entrance" ] && [ "$entrance" != "" ]; then
+            echo "$entrance"
+            return 0
+        fi
+    fi
+    
+    echo "$default_entrance"
+}
+
+# 缓存端口变量（在脚本开始时调用）
+cache_ports() {
+    CORE_PORT=$(get_core_port)
+    AGENT_PORT=$(get_agent_port)
+}
+
+# ============================================================
 # 交互式函数
 # ============================================================
 
@@ -397,24 +458,29 @@ print_status() {
     
     echo ""
     
+    # 获取实际端口
+    local core_port=$(get_core_port)
+    local agent_port=$(get_agent_port)
+    local security_entrance=$(get_security_entrance)
+    
     # 端口监听状态
     echo -e "${CYAN}==================== 端口状态 ====================${NC}"
     echo ""
     
     if command -v ss >/dev/null 2>&1; then
-        local port_8080=$(ss -tlnp 2>/dev/null | grep ':8080' || true)
-        local port_9998=$(ss -tlnp 2>/dev/null | grep ':9998' || true)
+        local port_core=$(ss -tlnp 2>/dev/null | grep ":${core_port}" || true)
+        local port_agent=$(ss -tlnp 2>/dev/null | grep ":${agent_port}" || true)
         
-        if [ -n "$port_8080" ]; then
-            echo -e "${GREEN}● 端口 8080 (Core):${NC} 监听中"
+        if [ -n "$port_core" ]; then
+            echo -e "${GREEN}● 端口 ${core_port} (Core):${NC} 监听中"
         else
-            echo -e "${RED}○ 端口 8080 (Core):${NC} 未监听"
+            echo -e "${RED}○ 端口 ${core_port} (Core):${NC} 未监听"
         fi
         
-        if [ -n "$port_9998" ]; then
-            echo -e "${GREEN}● 端口 9998 (Agent):${NC} 监听中"
+        if [ -n "$port_agent" ]; then
+            echo -e "${GREEN}● 端口 ${agent_port} (Agent):${NC} 监听中"
         else
-            echo -e "${RED}○ 端口 9998 (Agent):${NC} 未监听"
+            echo -e "${RED}○ 端口 ${agent_port} (Agent):${NC} 未监听"
         fi
     else
         echo -e "${YELLOW}无法检测端口状态 (ss 命令不可用)${NC}"
@@ -425,10 +491,29 @@ print_status() {
     # 访问地址
     if [ "$gpanel_status" = "running" ]; then
         local SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "your-server-ip")
+        
+        # 获取本地 IP（内网地址）
+        local LOCAL_IP=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -1)
+        fi
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP="$SERVER_IP"
+        fi
+        
         echo -e "${CYAN}==================== 访问地址 ====================${NC}"
         echo ""
-        echo -e "  本地访问: ${GREEN}http://localhost:8080${NC}"
-        echo -e "  外部访问: ${GREEN}http://${SERVER_IP}:8080${NC}"
+        
+        # 根据安全入口显示不同的访问地址
+        if [ "$security_entrance" != "/" ]; then
+            echo -e "  安全入口: ${GREEN}${security_entrance}${NC}"
+            echo ""
+            echo -e "  本地访问: ${GREEN}http://${LOCAL_IP}:${core_port}${security_entrance}${NC}"
+            echo -e "  外部访问: ${GREEN}http://${SERVER_IP}:${core_port}${security_entrance}${NC}"
+        else
+            echo -e "  本地访问: ${GREEN}http://${LOCAL_IP}:${core_port}${NC}"
+            echo -e "  外部访问: ${GREEN}http://${SERVER_IP}:${core_port}${NC}"
+        fi
         echo ""
     fi
 }
@@ -758,19 +843,23 @@ EOF
 configure_firewall() {
     log_step "配置防火墙..."
     
+    # 获取实际端口
+    local core_port=$(get_core_port)
+    local agent_port=$(get_agent_port)
+    
     if command -v firewall-cmd >/dev/null 2>&1; then
         # CentOS/RHEL/Fedora 使用 firewalld
-        firewall-cmd --permanent --add-port=8080/tcp 2>/dev/null || true
-        firewall-cmd --permanent --add-port=9998/tcp 2>/dev/null || true
+        firewall-cmd --permanent --add-port=${core_port}/tcp 2>/dev/null || true
+        firewall-cmd --permanent --add-port=${agent_port}/tcp 2>/dev/null || true
         firewall-cmd --reload 2>/dev/null || true
-        log_info "firewalld 防火墙规则已添加"
+        log_info "firewalld 防火墙规则已添加 (端口: ${core_port}, ${agent_port})"
     elif command -v ufw >/dev/null 2>&1; then
         # Ubuntu/Debian 使用 ufw
-        ufw allow 8080/tcp 2>/dev/null || true
-        ufw allow 9998/tcp 2>/dev/null || true
-        log_info "ufw 防火墙规则已添加"
+        ufw allow ${core_port}/tcp 2>/dev/null || true
+        ufw allow ${agent_port}/tcp 2>/dev/null || true
+        log_info "ufw 防火墙规则已添加 (端口: ${core_port}, ${agent_port})"
     else
-        log_warn "未检测到防火墙管理工具，请手动开放 8080 和 9998 端口"
+        log_warn "未检测到防火墙管理工具，请手动开放 ${core_port} 和 ${agent_port} 端口"
     fi
 }
 
@@ -829,7 +918,10 @@ print_install_success() {
     if command -v gpctl >/dev/null 2>&1; then
         gpctl init-security --show
     else
-        # 备用方案：手动获取 IP
+        # 备用方案：手动获取 IP 和端口
+        local core_port=$(get_core_port)
+        local security_entrance=$(get_security_entrance)
+        
         SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
         if [ -z "$SERVER_IP" ]; then
             SERVER_IP="your-server-ip"
@@ -844,8 +936,14 @@ print_install_success() {
         fi
         
         echo -e "${GREEN}访问地址:${NC}"
-        echo "  本地访问: http://${LOCAL_IP}:8080"
-        echo "  外部访问: http://${SERVER_IP}:8080"
+        if [ "$security_entrance" != "/" ]; then
+            echo "  安全入口: ${security_entrance}"
+            echo "  本地访问: http://${LOCAL_IP}:${core_port}${security_entrance}"
+            echo "  外部访问: http://${SERVER_IP}:${core_port}${security_entrance}"
+        else
+            echo "  本地访问: http://${LOCAL_IP}:${core_port}"
+            echo "  外部访问: http://${SERVER_IP}:${core_port}"
+        fi
     fi
     
     echo ""
@@ -1043,9 +1141,6 @@ do_install() {
     # 创建 systemd 服务
     create_systemd_services
     
-    # 配置防火墙
-    configure_firewall
-    
     # 启动服务
     start_services
     
@@ -1080,6 +1175,9 @@ do_install() {
     else
         log_info "检测到已存在的数据库，保留原有配置"
     fi
+    
+    # 配置防火墙（在安全配置之后，使用实际端口）
+    configure_firewall
     
     # 保存安装信息
     save_install_info "$VERSION"

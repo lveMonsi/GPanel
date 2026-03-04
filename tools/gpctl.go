@@ -58,6 +58,10 @@ func main() {
 		handleUserInfo()
 	case "init-security":
 		handleInitSecurity()
+	case "get-port":
+		handleGetPort()
+	case "get-entrance":
+		handleGetEntrance()
 	case "reset":
 		handleReset()
 	case "restore":
@@ -95,6 +99,14 @@ func printUsage() {
 	fmt.Println("    init-security           随机生成端口和安全入口")
 	fmt.Println("    init-security --port N  指定端口，随机安全入口")
 	fmt.Println("    init-security --show    仅显示当前连接信息")
+	fmt.Println("  get-port            获取服务端口")
+	fmt.Println("    get-port                显示 Core 和 Agent 端口")
+	fmt.Println("    get-port core           仅显示 Core 端口")
+	fmt.Println("    get-port agent          仅显示 Agent 端口")
+	fmt.Println("    get-port --quiet        静默输出（格式: CORE_PORT AGENT_PORT）")
+	fmt.Println("  get-entrance        获取安全入口")
+	fmt.Println("    get-entrance             显示安全入口")
+	fmt.Println("    get-entrance --quiet     静默输出（仅输出安全入口路径）")
 	fmt.Println("  reset               重置 GPanel 配置")
 	fmt.Println("    reset domain      取消域名绑定")
 	fmt.Println("    reset entrance    取消安全入口 (设置为 /)")
@@ -1040,6 +1052,148 @@ func handleInitSecurity() {
 	// 显示连接信息
 	fmt.Println()
 	printConnectionInfo()
+}
+
+// handleGetPort 处理 get-port 命令
+// 功能：获取服务端口
+// 参数：
+//   core/agent  指定服务
+//   --quiet     静默输出（仅输出端口号）
+func handleGetPort() {
+	// 解析参数
+	quiet := false
+	service := ""
+
+	for i := 2; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if arg == "--quiet" || arg == "-q" {
+			quiet = true
+		} else if arg != "" && !strings.HasPrefix(arg, "-") {
+			service = arg
+		}
+	}
+
+	// 获取端口
+	corePort := getCorePort()
+	agentPort := getAgentPort()
+
+	// 静默模式：只输出端口号
+	if quiet {
+		switch service {
+		case "core":
+			fmt.Println(corePort)
+		case "agent":
+			fmt.Println(agentPort)
+		default:
+			fmt.Printf("%s %s\n", corePort, agentPort)
+		}
+		return
+	}
+
+	// 格式化输出
+	switch service {
+	case "core":
+		fmt.Println(corePort)
+	case "agent":
+		fmt.Println(agentPort)
+	default:
+		fmt.Printf("Core 端口: %s\n", corePort)
+		fmt.Printf("Agent 端口: %s\n", agentPort)
+	}
+}
+
+// handleGetEntrance 处理 get-entrance 命令
+// 功能：获取安全入口
+// 参数：
+//   --quiet     静默输出（仅输出安全入口路径）
+func handleGetEntrance() {
+	// 解析参数
+	quiet := false
+
+	for i := 2; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if arg == "--quiet" || arg == "-q" {
+			quiet = true
+		}
+	}
+
+	// 获取安全入口
+	entrance := getSecurityEntrance()
+
+	// 静默模式
+	if quiet {
+		fmt.Println(entrance)
+		return
+	}
+
+	// 格式化输出
+	fmt.Println(entrance)
+}
+
+// getSecurityEntrance 获取安全入口
+func getSecurityEntrance() string {
+	// 尝试从数据库加载配置
+	if err := loadConfig(); err == nil {
+		return getConfig("SecurityEntrance", "/")
+	}
+	return "/"
+}
+
+// getCorePort 获取 Core 服务端口
+func getCorePort() string {
+	// 尝试从数据库加载配置
+	if err := loadConfig(); err == nil {
+		return getConfig("ServerPort", "8080")
+	}
+	return "8080"
+}
+
+// getAgentPort 获取 Agent 服务端口
+func getAgentPort() string {
+	// 1. 尝试从 systemd 服务环境变量读取
+	cmd := exec.Command("systemctl", "show", "gpanel-agent", "--property=Environment", "--value")
+	output, err := cmd.Output()
+	if err == nil {
+		env := strings.TrimSpace(string(output))
+		// 解析环境变量，查找 GAGENT_LISTEN
+		for _, line := range strings.Split(env, "\n") {
+			if strings.HasPrefix(line, "GAGENT_LISTEN=") {
+				listenAddr := strings.TrimPrefix(line, "GAGENT_LISTEN=")
+				// 提取端口（格式: 0.0.0.0:9998 或 [::]:9998）
+				if idx := strings.LastIndex(listenAddr, ":"); idx != -1 {
+					return listenAddr[idx+1:]
+				}
+			}
+		}
+	}
+
+	// 2. 尝试从服务文件中读取 EnvironmentFile
+	serviceFile := "/etc/systemd/system/gpanel-agent.service"
+	if content, err := os.ReadFile(serviceFile); err == nil {
+		contentStr := string(content)
+		// 查找 EnvironmentFile
+		for _, line := range strings.Split(contentStr, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "EnvironmentFile=") {
+				envFile := strings.TrimPrefix(line, "EnvironmentFile=")
+				envFile = strings.Trim(envFile, "\"'")
+				if envContent, err := os.ReadFile(envFile); err == nil {
+					for _, envLine := range strings.Split(string(envContent), "\n") {
+						envLine = strings.TrimSpace(envLine)
+						if strings.HasPrefix(envLine, "GAGENT_LISTEN=") {
+							listenAddr := strings.TrimPrefix(envLine, "GAGENT_LISTEN=")
+							if idx := strings.LastIndex(listenAddr, ":"); idx != -1 {
+								return listenAddr[idx+1:]
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 3. 返回默认值
+	return "9998"
 }
 
 // generateRandomPort 生成随机端口（10000-65535）
