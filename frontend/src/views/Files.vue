@@ -418,7 +418,8 @@ const loadFileList = async () => {
           sortOrder: 'ascending',
         });
         if (response.data.code === 200) {
-          fileList.value = response.data.data.items.map(item => ({
+          const items = response.data.data.items || [];
+          fileList.value = items.map(item => ({
             ...item,
             path: toDisplayPath(item.path),
           }));
@@ -442,7 +443,8 @@ const loadFileList = async () => {
       sortOrder: 'ascending',
     });
     if (response.data.code === 200) {
-      fileList.value = response.data.data.items.map(item => ({
+      const items = response.data.data.items || [];
+      fileList.value = items.map(item => ({
         ...item,
         path: toDisplayPath(item.path),
       }));
