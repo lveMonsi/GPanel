@@ -233,6 +233,7 @@ select_option() {
     echo -e "${CYAN}${prompt}${NC}"
     echo ""
     
+    echo -e "  ${GREEN}0)${NC} 退出"
     local i=1
     for opt in "${options[@]}"; do
         echo -e "  ${GREEN}$i)${NC} $opt"
@@ -241,7 +242,7 @@ select_option() {
     echo ""
     
     while true; do
-        echo -ne "${YELLOW}请选择 [1-${#options[@]}]: ${NC}"
+        echo -ne "${YELLOW}请选择 [0-${#options[@]}]: ${NC}"
         
         if [ "$INTERACTIVE" = true ]; then
             read -r reply < "$TTY_DEVICE"
@@ -250,12 +251,17 @@ select_option() {
             reply=1
         fi
         
+        if [ "$reply" = "0" ]; then
+            SELECTED_OPTION="__EXIT__"
+            return 1
+        fi
+        
         if [[ "$reply" =~ ^[0-9]+$ ]] && [ "$reply" -ge 1 ] && [ "$reply" -le ${#options[@]} ]; then
             SELECTED_OPTION="${options[$((reply-1))]}"
             return 0
         fi
         
-        log_error "无效选择，请输入 1-${#options[@]}"
+        log_error "无效选择，请输入 0-${#options[@]}"
     done
 }
 
@@ -268,16 +274,17 @@ select_version() {
     echo -e "${CYAN}${prompt}${NC}"
     echo ""
     
+    echo -e "  ${GREEN}0)${NC} 退出"
     local i=1
     for ver in "${versions[@]}"; do
         echo -e "  ${GREEN}$i)${NC} $ver"
         ((i++))
     done
-    echo -e "  ${GREEN}0)${NC} 手动输入版本号"
+    echo -e "  ${GREEN}$i)${NC} 手动输入版本号"
     echo ""
     
     while true; do
-        echo -ne "${YELLOW}请选择 [0-${#versions[@]}]: ${NC}"
+        echo -ne "${YELLOW}请选择 [0-${#versions[@]}+1]: ${NC}"
         
         if [ "$INTERACTIVE" = true ]; then
             read -r reply < "$TTY_DEVICE"
@@ -287,6 +294,17 @@ select_version() {
         fi
         
         if [ "$reply" = "0" ]; then
+            SELECTED_VERSION=""
+            return 1
+        fi
+        
+        if [[ "$reply" =~ ^[0-9]+$ ]] && [ "$reply" -ge 1 ] && [ "$reply" -le ${#versions[@]} ]; then
+            SELECTED_VERSION="${versions[$((reply-1))]}"
+            return 0
+        fi
+        
+        # 手动输入版本号（最后一个选项）
+        if [ "$reply" -eq $((${#versions[@]}+1)) ]; then
             echo -ne "${YELLOW}请输入版本号 (如 v1.0.0): ${NC}"
             if [ "$INTERACTIVE" = true ]; then
                 read -r SELECTED_VERSION < "$TTY_DEVICE"
@@ -297,12 +315,7 @@ select_version() {
             return 0
         fi
         
-        if [[ "$reply" =~ ^[0-9]+$ ]] && [ "$reply" -ge 1 ] && [ "$reply" -le ${#versions[@]} ]; then
-            SELECTED_VERSION="${versions[$((reply-1))]}"
-            return 0
-        fi
-        
-        log_error "无效选择，请输入 0-${#versions[@]}"
+        log_error "无效选择，请输入 0-$((${#versions[@]}+1))"
     done
 }
 
@@ -984,7 +997,13 @@ do_install() {
         log_warn "GPanel 已安装 (当前版本: $installed_version)"
         echo ""
         
-        select_option "请选择操作:" "更新到新版本" "卸载后重新安装" "取消操作"
+        select_option "请选择操作:" "更新到新版本" "卸载后重新安装"
+        
+        # 用户选择退出
+        if [ $? -ne 0 ]; then
+            log_info "操作已取消"
+            return 0
+        fi
         
         case "$SELECTED_OPTION" in
             "更新到新版本")
@@ -998,10 +1017,6 @@ do_install() {
                 fi
                 echo ""
                 log_info "继续安装..."
-                ;;
-            "取消操作")
-                log_info "操作已取消"
-                return 0
                 ;;
         esac
     fi
@@ -1039,6 +1054,10 @@ do_install() {
             fi
             
             select_version "请选择要安装的版本:" "${versions[@]}"
+            if [ $? -ne 0 ]; then
+                log_info "安装已取消"
+                exit 0
+            fi
             target_version="$SELECTED_VERSION"
         fi
         VERSION="$target_version"
@@ -1060,17 +1079,22 @@ do_install() {
             fi
             
             select_version "请选择要安装的版本:" "${versions[@]}"
+            if [ $? -ne 0 ]; then
+                log_info "安装已取消"
+                exit 0
+            fi
             VERSION="$SELECTED_VERSION"
         else
             echo ""
             echo -e "${CYAN}可用版本:${NC}"
+            echo -e "  ${GREEN}0)${NC} 退出"
             echo -e "  ${GREEN}1)${NC} $latest_version (最新版)"
             echo -e "  ${GREEN}2)${NC} 选择其他版本"
             echo -e "  ${GREEN}3)${NC} 手动输入版本号"
             echo ""
             
             local choice
-            echo -ne "${YELLOW}请选择 [1-3]: ${NC}"
+            echo -ne "${YELLOW}请选择 [0-3]: ${NC}"
             if [ "$INTERACTIVE" = true ]; then
                 read -r choice < "$TTY_DEVICE"
             else
@@ -1079,6 +1103,10 @@ do_install() {
             fi
             
             case "$choice" in
+                0)
+                    log_info "安装已取消"
+                    exit 0
+                    ;;
                 1)
                     VERSION="$latest_version"
                     ;;
@@ -1092,7 +1120,11 @@ do_install() {
                         exit 1
                     fi
                     
-                    select_version "请选择要安装的版本:" "${versions[@]}"
+                    select_version "请选择要安装���版本:" "${versions[@]}"
+                    if [ $? -ne 0 ]; then
+                        log_info "安装已取消"
+                        exit 0
+                    fi
                     VERSION="$SELECTED_VERSION"
                     ;;
                 3)
@@ -1255,17 +1287,22 @@ do_update() {
             fi
             
             select_version "请选择要更新的版本:" "${versions[@]}"
+            if [ $? -ne 0 ]; then
+                log_info "更新已取消"
+                exit 0
+            fi
             VERSION="$SELECTED_VERSION"
         else
             echo ""
             echo -e "${CYAN}可用版本:${NC}"
+            echo -e "  ${GREEN}0)${NC} 退出"
             echo -e "  ${GREEN}1)${NC} $latest_version (最新版)"
             echo -e "  ${GREEN}2)${NC} 选择其他版本"
             echo -e "  ${GREEN}3)${NC} 手动输入版本号"
             echo ""
             
             local choice
-            echo -ne "${YELLOW}请选择 [1-3]: ${NC}"
+            echo -ne "${YELLOW}请选择 [0-3]: ${NC}"
             if [ "$INTERACTIVE" = true ]; then
                 read -r choice < "$TTY_DEVICE"
             else
@@ -1274,6 +1311,10 @@ do_update() {
             fi
             
             case "$choice" in
+                0)
+                    log_info "更新已取消"
+                    exit 0
+                    ;;
                 1)
                     VERSION="$latest_version"
                     ;;
@@ -1288,6 +1329,10 @@ do_update() {
                     fi
                     
                     select_version "请选择要更新的版本:" "${versions[@]}"
+                    if [ $? -ne 0 ]; then
+                        log_info "更新已取消"
+                        exit 0
+                    fi
                     VERSION="$SELECTED_VERSION"
                     ;;
                 3)
@@ -1332,6 +1377,10 @@ do_update() {
         
         if [ ${#versions[@]} -gt 0 ]; then
             select_version "请选择要更新的版本:" "${versions[@]}"
+            if [ $? -ne 0 ]; then
+                log_info "更新已取消"
+                exit 0
+            fi
             VERSION="$SELECTED_VERSION"
         else
             exit 1
