@@ -15,11 +15,15 @@ func SecurityEntrance() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		
-		// 跳过API路由、静态资源和登录页面
-		if strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || path == "/login" || path == "/dashboard" {
-			c.Next()
-			return
-		}		// 获取配置的安全入口
+			// 跳过API路由和静态资源
+		
+			if strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") {
+		
+				c.Next()
+		
+				return
+		
+			}		// 获取配置的安全入口
 		var securityEntrance string
 		if global.ConfigCacheInstance != nil {
 			securityEntrance = global.ConfigCacheInstance.GetSecurityEntrance()
