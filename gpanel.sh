@@ -1087,10 +1087,10 @@ do_install() {
         else
             echo ""
             echo -e "${CYAN}可用版本:${NC}"
-            echo -e "  ${GREEN}0)${NC} 退出"
             echo -e "  ${GREEN}1)${NC} $latest_version (最新版)"
             echo -e "  ${GREEN}2)${NC} 选择其他版本"
             echo -e "  ${GREEN}3)${NC} 手动输入版本号"
+            echo -e "  ${GREEN}0)${NC} 退出"
             echo ""
             
             local choice
@@ -1295,10 +1295,10 @@ do_update() {
         else
             echo ""
             echo -e "${CYAN}可用版本:${NC}"
-            echo -e "  ${GREEN}0)${NC} 退出"
             echo -e "  ${GREEN}1)${NC} $latest_version (最新版)"
             echo -e "  ${GREEN}2)${NC} 选择其他版本"
             echo -e "  ${GREEN}3)${NC} 手动输入版本号"
+            echo -e "  ${GREEN}0)${NC} 退出"
             echo ""
             
             local choice
