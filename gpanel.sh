@@ -946,6 +946,18 @@ print_install_success() {
         fi
     fi
     
+    # 显示账号密码
+    echo ""
+    echo -e "${GREEN}登录信息:${NC}"
+    if [ -n "$RESET_USERNAME" ] && [ -n "$RESET_PASSWORD" ]; then
+        echo -e "  用户名: ${CYAN}${RESET_USERNAME}${NC}"
+        echo -e "  密码: ${CYAN}${RESET_PASSWORD}${NC}"
+    else
+        echo -e "  用户名: ${CYAN}admin${NC}"
+        echo -e "  密码: ${CYAN}admin123${NC}"
+        echo -e "  ${YELLOW}提示: 请使用 'gpctl reset password' 重置密码${NC}"
+    fi
+    
     echo ""
     echo -e "${GREEN}服务管理:${NC}"
     echo "  sudo ./gpanel.sh update    # 更新版本"
@@ -1166,6 +1178,16 @@ do_install() {
             if command -v gpctl >/dev/null 2>&1; then
                 log_info "正在生成随机端口和安全入口..."
                 gpctl init-security
+                
+                # 重置 admin 密码并保存
+                log_info "正在重置管理员密码..."
+                RESET_OUTPUT=$(gpctl reset password --quiet 2>/dev/null)
+                if [ -n "$RESET_OUTPUT" ]; then
+                    # 格式: username password
+                    RESET_USERNAME=$(echo "$RESET_OUTPUT" | awk '{print $1}')
+                    RESET_PASSWORD=$(echo "$RESET_OUTPUT" | awk '{print $2}')
+                    log_info "管理员密码已重置"
+                fi
             else
                 log_warn "gpctl 命令不可用，跳过安全配置初始化"
             fi

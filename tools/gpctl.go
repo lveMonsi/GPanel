@@ -115,6 +115,11 @@ func printUsage() {
 	fmt.Println("  reset               重置 GPanel 配置")
 	fmt.Println("    reset domain      取消域名绑定")
 	fmt.Println("    reset entrance    取消安全入口 (设置为 /)")
+	fmt.Println("    reset password    重置指定用户密码")
+	fmt.Println("        reset password              交互式重置 admin 密码")
+	fmt.Println("        reset password <username>   重置指定用户密码")
+	fmt.Println("        reset password --quiet      静默重置 admin 密码")
+	fmt.Println("        reset password <username> --quiet  静默重置指定用户密码")
 	fmt.Println("  restore             恢复 GPanel 到上一个稳定版本")
 	fmt.Println("  listen-ip           修改监听 IP")
 	fmt.Println("    listen-ip ipv4    监听 IPv4 (0.0.0.0)")
@@ -778,6 +783,7 @@ func handleReset() {
 		fmt.Println("请指定重置选项:")
 		fmt.Println("  gpctl reset domain    取消域名绑定")
 		fmt.Println("  gpctl reset entrance  取消安全入口 (设置为 /)")
+		fmt.Println("  gpctl reset password  重置指定用户密码")
 		os.Exit(1)
 	}
 
@@ -788,9 +794,11 @@ func handleReset() {
 		resetDomain()
 	case "entrance":
 		resetEntrance()
+	case "password":
+		resetPassword()
 	default:
 		fmt.Printf("未知的重置选项: %s\n", subCommand)
-		fmt.Println("可用选项: domain, entrance")
+		fmt.Println("可用选项: domain, entrance, password")
 		os.Exit(1)
 	}
 }
@@ -1490,4 +1498,105 @@ func getServerIP() string {
 	}
 
 	return "your-server-ip"
+}
+
+// resetPassword 重置指定用户的密码
+func resetPassword() {
+	// 解析参数
+	quiet := false
+	username := "admin"
+
+	// 遍历参数
+	for i := 3; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if arg == "--quiet" || arg == "-q" {
+			quiet = true
+		} else if !strings.HasPrefix(arg, "-") {
+			username = arg
+		}
+	}
+
+	// 加载配置
+	if err := loadConfig(); err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 验证用户名是否存在
+	currentUsername := getConfig("PanelUser", "admin")
+	if username != currentUsername {
+		fmt.Printf("错误: 用户 '%s' 不存在\n", username)
+		fmt.Printf("当前用户: %s\n", currentUsername)
+		os.Exit(1)
+	}
+
+	// 生成随机密码
+	newPassword := generateRandomPassword()
+
+	// 更新密码
+	if err := updateConfig("PanelPassword", newPassword); err != nil {
+		fmt.Printf("重置密码失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 静默模式：仅输出用户名和密码
+	if quiet {
+		fmt.Printf("%s %s\n", username, newPassword)
+		return
+	}
+
+	// 交互模式：显示详细信息
+	fmt.Println("=== 密码重置成功 ===")
+	fmt.Println()
+	fmt.Printf("  用户名: %s\n", username)
+	fmt.Printf("  新密码: %s\n", newPassword)
+	fmt.Println()
+	fmt.Println("提示: 请妥善保管新密码")
+}
+
+// generateRandomPassword 生成随机密码
+// 8位长度，包含大小写字母、数字和符号
+func generateRandomPassword() string {
+	const (
+		length      = 8
+		lowercase   = "abcdefghijklmnopqrstuvwxyz"
+		uppercase   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		digits      = "0123456789"
+		symbols     = "!@#$%^&*"
+		allChars    = lowercase + uppercase + digits + symbols
+	)
+
+	password := make([]byte, length)
+
+	// 确保每种字符至少有一个
+	charSets := []string{lowercase, uppercase, digits, symbols}
+	for i := 0; i < 4; i++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charSets[i]))))
+		if err != nil {
+			password[i] = charSets[i][0]
+			continue
+		}
+		password[i] = charSets[i][n.Int64()]
+	}
+
+	// 填充剩余位置
+	for i := 4; i < length; i++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(allChars))))
+		if err != nil {
+			password[i] = allChars[0]
+			continue
+		}
+		password[i] = allChars[n.Int64()]
+	}
+
+	// 随机打乱顺序
+	for i := len(password) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			continue
+		}
+		password[i], password[n.Int64()] = password[n.Int64()], password[i]
+	}
+
+	return string(password)
 }
