@@ -29,7 +29,7 @@
 
     <div class="rules-content">
       <el-table
-        :data="currentPageData"
+        :data="allRules"
         v-loading="loading"
         @selection-change="handleSelectionChange"
         stripe
@@ -115,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Delete, Search } from '@element-plus/icons-vue';
 import { searchRules, operatePortRule, updatePortRule } from '@/api/modules/firewall';
@@ -136,12 +136,6 @@ const formRef = ref();
 const currentPage = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
-
-const currentPageData = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value;
-  const end = start + pageSize.value;
-  return allRules.value.slice(start, end);
-});
 
 const form = ref<PortRuleOperate>({
   operation: 'add',
