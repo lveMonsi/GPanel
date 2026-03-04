@@ -85,6 +85,11 @@ func (s *FirewallService) SearchRules(req dto.RuleSearch) (interface{}, error) {
 		return nil, err
 	}
 
+	// 端口规则时检查端口占用状态
+	if req.Type == "port" {
+		s.fillPortUsedStatus(rules)
+	}
+
 	// 信息过滤
 	if req.Info != "" {
 		var filtered []dto.FireInfo
@@ -122,6 +127,48 @@ func (s *FirewallService) SearchRules(req dto.RuleSearch) (interface{}, error) {
 		"total": total,
 		"items": rules[start:end],
 	}, nil
+}
+
+// fillPortUsedStatus 填充端口占用状态
+func (s *FirewallService) fillPortUsedStatus(rules []dto.FireInfo) {
+	// 收集所有端口
+	var ports []string
+	for _, rule := range rules {
+		if rule.Port != "" {
+			// 解析端口范围
+			parsedPorts := firewall.ParsePortRange(rule.Port)
+			ports = append(ports, parsedPorts...)
+		}
+	}
+
+	// 批量检查端口状态
+	if len(ports) > 0 {
+		portStatusMap := firewall.CheckPortsUsed(ports, "")
+
+		// 填充状态
+		for i := range rules {
+			if rules[i].Port != "" {
+				parsedPorts := firewall.ParsePortRange(rules[i].Port)
+				if len(parsedPorts) > 0 {
+					// 检查第一个端口的状态
+					protocol := rules[i].Protocol
+					if protocol == "" || protocol == "tcp/udp" {
+						protocol = "tcp"
+					}
+					key := parsedPorts[0] + "_" + protocol
+					if status, exists := portStatusMap[key]; exists {
+						if status.Used {
+							rules[i].UsedStatus = "used"
+						} else {
+							rules[i].UsedStatus = "unused"
+						}
+					} else {
+						rules[i].UsedStatus = "unused"
+					}
+				}
+			}
+		}
+	}
 }
 
 // OperateFirewall 操作防火墙
