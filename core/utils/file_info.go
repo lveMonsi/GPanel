@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,6 +12,12 @@ import (
 	"strings"
 
 	"gpanel/dto"
+	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
+	"golang.org/x/text/transform"
 )
 
 // FileOption 文件选项
@@ -188,22 +197,170 @@ func GetFileContent(path string) (*dto.FileContentRes, error) {
 		return nil, fmt.Errorf("path is a directory")
 	}
 
-	fileOp := NewFileOp()
-	content, err := fileOp.ReadFile(path)
+	// 文件大小限制：10MB
+	const maxFileSize = 10 * 1024 * 1024
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var content []byte
+	var truncated bool
+
+	// 检测二进制文件（读取前 1024 字节）
+	headBuf := make([]byte, 1024)
+	n, err := file.Read(headBuf)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	headBuf = headBuf[:n]
+
+	if len(headBuf) > 0 && DetectBinary(headBuf) {
+		return nil, fmt.Errorf("file is binary and cannot be displayed")
+	}
+
+	// 根据文件大小决定读取方式
+	if info.Size() <= maxFileSize {
+		// 小文件：全部读取
+		content = make([]byte, info.Size())
+		copy(content, headBuf)
+		if _, err := file.ReadAt(content[n:], int64(n)); err != nil && err != io.EOF {
+			return nil, err
+		}
+		truncated = false
+	} else {
+		// 大文件：只读取最后 300 行
+		lines, err := tailFromEnd(path, 300)
+		if err != nil {
+			return nil, err
+		}
+		content = []byte(strings.Join(lines, "\n"))
+		truncated = true
+	}
+
+	// 编码检测和转换
+	content = convertToUTF8(content)
+
+	return &dto.FileContentRes{
+		Path:      path,
+		Name:      info.Name(),
+		Content:   string(content),
+		Mode:      fmt.Sprintf("%04o", info.Mode().Perm()),
+		Size:      info.Size(),
+		MimeType:  GetMimeType(path),
+		Truncated: truncated,
+	}, nil
+}
+
+// convertToUTF8 将内容转换为 UTF-8 编码
+func convertToUTF8(content []byte) []byte {
+	if len(content) == 0 {
+		return content
+	}
+
+	// 检测编码
+	_, encodingName, _ := charset.DetermineEncoding(content, "")
+	if encodingName == "" || encodingName == "utf-8" {
+		return content
+	}
+
+	// 获取解码器
+	decoder := getDecoderByName(encodingName)
+	if decoder == nil {
+		return content
+	}
+
+	// 转换编码
+	reader := transform.NewReader(bytes.NewReader(content), decoder)
+	decoded, err := io.ReadAll(reader)
+	if err != nil {
+		return content
+	}
+
+	return decoded
+}
+
+// getDecoderByName 根据编码名称获取解码器
+func getDecoderByName(name string) encoding.Encoding {
+	// 常见编码映射
+	switch strings.ToLower(name) {
+	case "gbk", "gb2312":
+		return simplifiedchinese.GBK
+	case "gb18030":
+		return simplifiedchinese.GB18030
+	case "big5":
+		return traditionalchinese.Big5
+	case "iso-8859-1", "latin1":
+		return charmap.ISO8859_1
+	case "windows-1252":
+		return charmap.Windows1252
+	default:
+		return nil
+	}
+}
+
+// tailFromEnd 从文件末尾读取指定行数
+func tailFromEnd(path string, lines int) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(content) > 0 && DetectBinary(content) {
-		return nil, fmt.Errorf("file is binary and cannot be displayed")
+	size := stat.Size()
+	if size == 0 {
+		return []string{}, nil
 	}
 
-	return &dto.FileContentRes{
-		Path:     path,
-		Name:     info.Name(),
-		Content:  string(content),
-		Mode:     fmt.Sprintf("%04o", info.Mode().Perm()),
-		Size:     info.Size(),
-		MimeType: GetMimeType(path),
-	}, nil
+	// 从文件末尾开始读取
+	buf := make([]byte, 4096)
+	var content []byte
+	lineCount := 0
+	pos := size
+
+	for pos > 0 && lineCount < lines {
+		readSize := int64(len(buf))
+		if pos < readSize {
+			readSize = pos
+		}
+		pos -= readSize
+
+		_, err := file.ReadAt(buf[:readSize], pos)
+		if err != nil {
+			return nil, err
+		}
+
+		content = append(buf[:readSize], content...)
+
+		// 计算换行符数量
+		for i := 0; i < len(buf[:readSize]); i++ {
+			if buf[i] == '\n' {
+				lineCount++
+				if lineCount >= lines {
+					break
+				}
+			}
+		}
+	}
+
+	// 解析行
+	var result []string
+	scanner := bufio.NewScanner(bytes.NewReader(content))
+	for scanner.Scan() {
+		result = append(result, scanner.Text())
+	}
+
+	// 如果行数超过 lines，只取最后 lines 行
+	if len(result) > lines {
+		result = result[len(result)-lines:]
+	}
+
+	return result, nil
 }

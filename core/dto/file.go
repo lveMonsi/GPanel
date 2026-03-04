@@ -74,12 +74,13 @@ type FileContentReq struct {
 
 // FileContentRes 文件内容响应
 type FileContentRes struct {
-	Path     string `json:"path"`
-	Name     string `json:"name"`
-	Content  string `json:"content"`
-	Mode     string `json:"mode"`
-	Size     int64  `json:"size"`
-	MimeType string `json:"mimeType"`
+	Path      string `json:"path"`
+	Name      string `json:"name"`
+	Content   string `json:"content"`
+	Mode      string `json:"mode"`
+	Size      int64  `json:"size"`
+	MimeType  string `json:"mimeType"`
+	Truncated bool   `json:"truncated"`  // 文件是否被截断（超过大小限制）
 }
 
 // FileEditReq 编辑文件内容请求

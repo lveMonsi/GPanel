@@ -67,6 +67,7 @@ export interface FileContentRes {
   mode: string;
   size: number;
   mimeType: string;
+  truncated: boolean;  // 文件是否被截断（超过大小限制）
 }
 
 export interface FileEditReq {

@@ -9,6 +9,8 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/shirou/gopsutil/v4 v4.24.5
 	github.com/spf13/afero v1.15.0
+	golang.org/x/net v0.25.0
+	golang.org/x/text v0.28.0
 	gorm.io/gorm v1.31.1
 )
 
