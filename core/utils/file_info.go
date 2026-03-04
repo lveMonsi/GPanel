@@ -273,7 +273,7 @@ func convertToUTF8(content []byte) []byte {
 	}
 
 	// 转换编码
-	reader := transform.NewReader(bytes.NewReader(content), decoder)
+	reader := transform.NewReader(bytes.NewReader(content), decoder.NewDecoder())
 	decoded, err := io.ReadAll(reader)
 	if err != nil {
 		return content
