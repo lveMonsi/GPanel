@@ -111,18 +111,17 @@ jobs:
           sha256sum gpanel-linux-arm64.tar.gz >> checksums.txt
           sha256sum gpanel-windows-amd64.zip >> checksums.txt
 
-      - name: Delete old pre-release
+      - name: Find old pre-release
+        id: find_old
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 查找并删除旧的 pre-release
-          OLD_RELEASE=$(gh release list --repo ${{ github.repository }} --json tagName,isPrerelease --jq '.[] | select(.isPrerelease == true and (.tagName | startswith("pre-release-"))) | .tagName' | head -1)
+          # 查找旧的 pre-release（排除即将创建的新版本）
+          OLD_RELEASE=$(gh release list --repo ${{ github.repository }} --json tagName,isPrerelease --jq '.[] | select(.isPrerelease == true and (.tagName | startswith("pre-release-")) and .tagName != "${{ steps.build_info.outputs.version }}") | .tagName' | head -1)
           
+          echo "old_release=$OLD_RELEASE" >> $GITHUB_OUTPUT
           if [ -n "$OLD_RELEASE" ]; then
-            echo "Deleting old pre-release: $OLD_RELEASE"
-            gh release delete "$OLD_RELEASE" --repo ${{ github.repository }} --yes --cleanup-tag
-            # 等待 GitHub 处理删除操作，避免时间戳冲突
-            sleep 3
+            echo "Found old pre-release: $OLD_RELEASE"
           else
             echo "No old pre-release found"
           fi
@@ -175,3 +174,11 @@ jobs:
             build/gpanel-linux-arm64.tar.gz \
             build/gpanel-windows-amd64.zip \
             build/checksums.txt
+
+      - name: Delete old pre-release
+        if: steps.find_old.outputs.old_release != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting old pre-release: ${{ steps.find_old.outputs.old_release }}"
+          gh release delete "${{ steps.find_old.outputs.old_release }}" --repo ${{ github.repository }} --yes --cleanup-tag
