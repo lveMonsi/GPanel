@@ -686,13 +686,25 @@ get_available_versions_array() {
 }
 
 # 验证版本是否存在
+# 规范化版本号（添加 v 前缀，但 pre-release 版本除外）
+normalize_version() {
+    local version=$1
+    
+    # pre-release 版本格式为 pre-release-xxx，不需要 v 前缀
+    if [[ "$version" =~ ^pre-release- ]]; then
+        echo "$version"
+    elif [[ ! "$version" =~ ^v ]]; then
+        echo "v${version}"
+    else
+        echo "$version"
+    fi
+}
+
 validate_version() {
     local version=$1
     
-    # 确保版本号以 v 开头
-    if [[ ! "$version" =~ ^v ]]; then
-        version="v${version}"
-    fi
+    # 规范化版本号
+    version=$(normalize_version "$version")
     
     local download_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${version}/gpanel-linux-${ARCH}.tar.gz"
     
@@ -1365,10 +1377,8 @@ do_install() {
     
     # 确定安装版本
     if [ -n "$target_version" ]; then
-        # 确保版本号以 v 开头
-        if [[ ! "$target_version" =~ ^v ]]; then
-            target_version="v${target_version}"
-        fi
+        # 规范化版本号
+        target_version=$(normalize_version "$target_version")
         
         # 验证版本是否存在
         log_info "验证版本 $target_version ..."
@@ -1467,9 +1477,7 @@ do_install() {
                         echo "$VERSION"
                     fi
                     
-                    if [[ ! "$VERSION" =~ ^v ]]; then
-                        VERSION="v${VERSION}"
-                    fi
+                    VERSION=$(normalize_version "$VERSION")
                     ;;
                 *)
                     log_info "使用最新版本: $latest_version"
@@ -1480,9 +1488,7 @@ do_install() {
     fi
     
     # 验证最终版本
-    if [[ ! "$VERSION" =~ ^v ]]; then
-        VERSION="v${VERSION}"
-    fi
+    VERSION=$(normalize_version "$VERSION")
     
     if ! validate_version "$VERSION"; then
         log_error "版本 $VERSION 不存在"
@@ -1600,10 +1606,8 @@ do_update() {
     
     # 确定目标版本
     if [ -n "$target_version" ]; then
-        # 确保版本号以 v 开头
-        if [[ ! "$target_version" =~ ^v ]]; then
-            target_version="v${target_version}"
-        fi
+        # 规范化版本号
+        target_version=$(normalize_version "$target_version")
         VERSION="$target_version"
     else
         # 获取最新版本
@@ -1680,9 +1684,7 @@ do_update() {
                         echo "$VERSION"
                     fi
                     
-                    if [[ ! "$VERSION" =~ ^v ]]; then
-                        VERSION="v${VERSION}"
-                    fi
+                    VERSION=$(normalize_version "$VERSION")
                     ;;
                 *)
                     log_info "使用最新版本: $latest_version"
