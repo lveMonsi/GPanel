@@ -128,11 +128,11 @@
     </div>
 
     <!-- 主内容区 -->
-    <div v-if="loading" class="loading-container">
+    <div v-show="loading" class="loading-container">
       <el-icon class="is-loading" :size="32"><Loading /></el-icon>
       <span>加载中...</span>
     </div>
-    <div v-else class="editor-main">
+    <div v-show="!loading" class="editor-main">
       <!-- 左侧文件树 -->
       <div v-show="showFileTree" class="file-tree-panel">
         <div class="tree-header">
