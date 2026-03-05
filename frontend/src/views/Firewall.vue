@@ -142,15 +142,25 @@ const handleOperate = async (operation: string) => {
 };
 
 const handlePingChange = async (enabled: boolean) => {
+  const message = enabled
+    ? '禁 ping 后将无法 ping 通服务器，是否继续？'
+    : '解除禁 ping 后您的服务器可能会被黑客发现，是否继续？';
+
   try {
+    await ElMessageBox.confirm(message, '是否禁 ping', {
+      type: 'warning',
+    });
     loading.value = true;
     const operation = enabled ? 'enableBanPing' : 'disableBanPing';
     await operateFirewall({ operation });
     ElMessage.success('设置成功');
     await loadBaseInfo();
   } catch (error: any) {
-    console.error('设置失败:', error);
-    ElMessage.error(error.message || '设置失败');
+    if (error !== 'cancel') {
+      console.error('设置失败:', error);
+      ElMessage.error(error.message || '设置失败');
+    }
+    // 取消或失败时恢复开关状态
     await loadBaseInfo();
   } finally {
     loading.value = false;
