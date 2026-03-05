@@ -121,52 +121,57 @@ jobs:
           if [ -n "$OLD_RELEASE" ]; then
             echo "Deleting old pre-release: $OLD_RELEASE"
             gh release delete "$OLD_RELEASE" --repo ${{ github.repository }} --yes --cleanup-tag
+            # 等待 GitHub 处理删除操作，避免时间戳冲突
+            sleep 3
           else
             echo "No old pre-release found"
           fi
 
       - name: Create Pre-release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.build_info.outputs.version }}
-          name: GPanel Pre-release ${{ steps.build_info.outputs.build_time }}
-          body: |
-            ## GPanel 预发布版本
-            
-            > **注意**: 这是一个预发布版本，可能包含未完成的功能、Bug 或不稳定的内容。不建议在生产环境中使用。
-            
-            ### 构建信息
-            
-            | 项目 | 内容 |
-            | --- | --- |
-            | **构建时间** | ${{ steps.build_info.outputs.build_time }} |
-            | **Commit** | `${{ steps.build_info.outputs.commit_short }}` |
-            | **Commit Hash** | `${{ steps.build_info.outputs.commit_full }}` |
-            | **Commit Message** | ${{ steps.build_info.outputs.commit_msg }} |
-            
-            ### 下载说明
-            
-            请根据您的系统架构选择对应的压缩包：
-            - **Linux x86_64**: `gpanel-linux-amd64.tar.gz`
-            - **Linux ARM64**: `gpanel-linux-arm64.tar.gz`
-            - **Windows x86_64**: `gpanel-windows-amd64.zip`
-            
-            ### 安装方式
-            
-            可以使用管理脚本安装预发布版本：
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install-pre
-            ```
-            
-            ### 更新日志
-            
-            查看从上个正式版 `${{ steps.build_info.outputs.latest_release_tag }}` 到当前预发布版本的代码变更：[Compare](${{ steps.build_info.outputs.compare_url }})
-          files: |
-            build/gpanel-linux-amd64.tar.gz
-            build/gpanel-linux-arm64.tar.gz
-            build/gpanel-windows-amd64.zip
-            build/checksums.txt
-          prerelease: true
-          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 创建 release notes 文件
+          cat > /tmp/release_notes.md << 'EOF'
+          ## GPanel 预发布版本
+          
+          > **注意**: 这是一个预发布版本，可能包含未完成的功能、Bug 或不稳定的内容。不建议在生产环境中使用。
+          
+          ### 构建信息
+          
+          | 项目 | 内容 |
+          | --- | --- |
+          | **构建时间** | ${{ steps.build_info.outputs.build_time }} |
+          | **Commit** | `${{ steps.build_info.outputs.commit_short }}` |
+          | **Commit Hash** | `${{ steps.build_info.outputs.commit_full }}` |
+          | **Commit Message** | ${{ steps.build_info.outputs.commit_msg }} |
+          
+          ### 下载说明
+          
+          请根据您的系统架构选择对应的压缩包：
+          - **Linux x86_64**: `gpanel-linux-amd64.tar.gz`
+          - **Linux ARM64**: `gpanel-linux-arm64.tar.gz`
+          - **Windows x86_64**: `gpanel-windows-amd64.zip`
+          
+          ### 安装方式
+          
+          可以使用管理脚本安装预发布版本：
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install-pre
+          ```
+          
+          ### 更新日志
+          
+          查看从上个正式版 `${{ steps.build_info.outputs.latest_release_tag }}` 到当前预发布版本的代码变更：[Compare](${{ steps.build_info.outputs.compare_url }})
+          EOF
+          
+          # 使用 gh release create 创建预发布版本
+          gh release create "${{ steps.build_info.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --title "GPanel Pre-release ${{ steps.build_info.outputs.build_time }}" \
+            --notes-file /tmp/release_notes.md \
+            --prerelease \
+            build/gpanel-linux-amd64.tar.gz \
+            build/gpanel-linux-arm64.tar.gz \
+            build/gpanel-windows-amd64.zip \
+            build/checksums.txt
