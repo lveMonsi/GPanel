@@ -18,6 +18,8 @@ jobs:
       - name: Get build info
         id: build_info
         run: |
+          # 设置时区为上海
+          sudo timedatectl set-timezone Asia/Shanghai
           # 生成构建时间 (使用下划线替代空格，避免 ldflags 解析问题)
           BUILD_TIME=$(date '+%Y-%m-%d_%H:%M:%S_%Z')
           echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
