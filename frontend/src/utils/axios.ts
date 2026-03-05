@@ -19,15 +19,24 @@ axiosInstance.interceptors.request.use(
   }
 )
 
-// 响应拦截器 - 处理 401 错误
+// 响应拦截器 - 处理错误
 axiosInstance.interceptors.response.use(
   (response) => {
     return response
   },
   (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+    if (error.response) {
+      // 处理 401 错误
+      if (error.response.status === 401) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+      }
+      
+      // 优先使用后端返回的错误信息
+      const backendMessage = error.response.data?.message
+      if (backendMessage) {
+        error.message = backendMessage
+      }
     }
     return Promise.reject(error)
   }

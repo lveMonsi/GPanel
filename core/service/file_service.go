@@ -575,7 +575,10 @@ func (s *FileService) PreviewFile(req dto.FilePreviewReq) (*dto.FilePreviewRes, 
 			return nil, err
 		}
 
-		if len(content) > 0 && utils.DetectBinary(content) {
+		// 先检查文件扩展名是否为已知的文本文件类型
+		isKnownTextFile := utils.IsTextExtension(req.Path)
+		// 如果不是已知的文本文件类型，再进行二进制检测
+		if !isKnownTextFile && len(content) > 0 && utils.DetectBinary(content) {
 			result.Type = "binary"
 			result.Content = ""
 		} else {

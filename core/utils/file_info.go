@@ -209,15 +209,18 @@ func GetFileContent(path string) (*dto.FileContentRes, error) {
 	var content []byte
 	var truncated bool
 
-	// 检测二进制文件（读取前 1024 字节）
-	headBuf := make([]byte, 1024)
+	// 检测二进制文件（读取前 8192 字节以提高准确性）
+	headBuf := make([]byte, 8192)
 	n, err := file.Read(headBuf)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
 	headBuf = headBuf[:n]
 
-	if len(headBuf) > 0 && DetectBinary(headBuf) {
+	// 先检查文件扩展名是否为已知的文本文件类型
+	isKnownTextFile := IsTextExtension(path)
+	// 如果不是已知的文本文件类型，再进行二进制检测
+	if !isKnownTextFile && len(headBuf) > 0 && DetectBinary(headBuf) {
 		return nil, fmt.Errorf("file is binary and cannot be displayed")
 	}
 

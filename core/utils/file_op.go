@@ -379,29 +379,183 @@ func GetMimeType(path string) string {
 	return "application/octet-stream"
 }
 
+// textExtensions 文本文件扩展名白名单
+var textExtensions = map[string]bool{
+	".txt":    true,
+	".md":     true,
+	".markdown": true,
+	".json":   true,
+	".xml":    true,
+	".html":   true,
+	".htm":    true,
+	".css":    true,
+	".scss":   true,
+	".sass":   true,
+	".less":   true,
+	".js":     true,
+	".ts":     true,
+	".jsx":    true,
+	".tsx":    true,
+	".vue":    true,
+	".svelte": true,
+	".py":     true,
+	".rb":     true,
+	".php":    true,
+	".java":   true,
+	".kt":     true,
+	".kts":    true,
+	".go":     true,
+	".rs":     true,
+	".c":      true,
+	".h":      true,
+	".cpp":    true,
+	".hpp":    true,
+	".cc":     true,
+	".cxx":    true,
+	".cs":     true,
+	".swift":  true,
+	".m":      true,
+	".mm":     true,
+	".sh":     true,
+	".bash":   true,
+	".zsh":    true,
+	".fish":   true,
+	".ps1":    true,
+	".psm1":   true,
+	".bat":    true,
+	".cmd":    true,
+	".sql":    true,
+	".yaml":   true,
+	".yml":    true,
+	".toml":   true,
+	".ini":    true,
+	".conf":   true,
+	".cfg":    true,
+	".config": true,
+	".env":    true,
+	".gitignore": true,
+	".dockerignore": true,
+	".editorconfig": true,
+	".eslintrc": true,
+	".prettierrc": true,
+	".babelrc": true,
+	".log":    true,
+	".csv":    true,
+	".tsv":    true,
+	".lua":    true,
+	".r":      true,
+	".pl":     true,
+	".pm":     true,
+	".scala":  true,
+	".groovy": true,
+	".gradle": true,
+	".mvn":    true,
+	".properties": true,
+	".tf":     true,
+	".hcl":    true,
+	".nomad":  true,
+	".rego":   true,
+	".proto":  true,
+	".thrift": true,
+	".avdl":   true,
+	".plantuml": true,
+	".puml":   true,
+	".mermaid": true,
+	".dockerfile": true,
+	".makefile": true,
+	".rakefile": true,
+	".gemfile": true,
+	".pipfile": true,
+	".po":     true,
+	".pot":    true,
+	".srt":    true,
+	".vtt":    true,
+	".ass":    true,
+	".ssa":    true,
+}
+
+// IsTextExtension 检查文件扩展名是否为文本文件
+func IsTextExtension(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if textExtensions[ext] {
+		return true
+	}
+	// 检查特殊文件名（无扩展名）
+	name := strings.ToLower(filepath.Base(filename))
+	switch name {
+	case "dockerfile", "makefile", "rakefile", "gemfile", "pipfile", "jenkinsfile",
+		"vagrantfile", "brewfile", "podfile", "cartfile", "fastfile", "matchfile":
+		return true
+	}
+	// 检查以点开头的配置文件
+	if strings.HasPrefix(name, ".") && !strings.Contains(ext, ".") {
+		// 如 .gitignore, .env 等
+		return true
+	}
+	return false
+}
+
 // DetectBinary 检测是否为二进制文件
+// 改进后的算法：检查 NUL 字节和不可打印控制字符
 func DetectBinary(buf []byte) bool {
 	if len(buf) == 0 {
 		return false
 	}
-	
-	// 检查前 1024 字节
-	n := 1024
+
+	// 检查前 8192 字节（增加检测范围以提高准确性）
+	n := 8192
 	if len(buf) < n {
 		n = len(buf)
 	}
-	
-	whiteByte := 0
-	for i := 0; i < n; i++ {
-		if (buf[i] >= 0x20 && buf[i] <= 0x7E) || buf[i] == 9 || buf[i] == 10 || buf[i] == 13 {
-			whiteByte++
-		} else if buf[i] <= 6 || (buf[i] >= 14 && buf[i] <= 31) {
-			return true
+
+	// 检查 UTF-8 BOM
+	if n >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
+		return false // UTF-8 BOM，是文本文件
+	}
+
+	// 检查 UTF-16 BOM
+	if n >= 2 {
+		if (buf[0] == 0xFF && buf[1] == 0xFE) || (buf[0] == 0xFE && buf[1] == 0xFF) {
+			return false // UTF-16 BOM，是文本文件
 		}
 	}
-	
-	// 如果可打印字符占比小于 80%，认为是二进制文件
-	return float64(whiteByte)/float64(n) < 0.8
+
+	// 统计各类字符
+	nullCount := 0       // NUL 字节数
+	controlCount := 0    // 控制字符数（不包括常见空白字符）
+	textCount := 0       // 文本字符数（ASCII 可打印 + UTF-8 高位字节）
+
+	for i := 0; i < n; i++ {
+		b := buf[i]
+
+		switch {
+		case b == 0x00: // NUL 字节 - 二进制文件的强特征
+			nullCount++
+		case b == 0x09 || b == 0x0A || b == 0x0D: // Tab, LF, CR
+			textCount++
+		case b >= 0x20 && b <= 0x7E: // ASCII 可打印字符
+			textCount++
+		case b >= 0x80: // UTF-8 高位字节或其他多字节编码
+			textCount++
+		case b <= 0x08 || (b >= 0x0B && b <= 0x0C) || (b >= 0x0E && b <= 0x1F):
+			// 其他控制字符（不包括 Tab, LF, CR）
+			controlCount++
+		}
+	}
+
+	// 如果存在 NUL 字节，很可能是二进制文件
+	if nullCount > 0 {
+		return true
+	}
+
+	// 如果控制字符比例过高，可能是二进制文件
+	// 但放宽条件，因为某些文本文件可能包含少量控制字符
+	if float64(controlCount)/float64(n) > 0.3 {
+		return true
+	}
+
+	// 如果文本字符（包括 UTF-8 高位字节）占比超过 85%，认为是文本文件
+	return float64(textCount)/float64(n) < 0.85
 }
 
 // ChmodR 递归修改文件权限
