@@ -83,7 +83,7 @@
         <el-divider direction="vertical" />
         <el-dropdown trigger="click" @command="changeEOL">
           <el-button text>
-            换行符: {{ config.eol === 1 ? 'LF' : 'CRLF' }}
+            换行符: {{ config.eol === 0 ? 'LF' : 'CRLF' }}
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>
