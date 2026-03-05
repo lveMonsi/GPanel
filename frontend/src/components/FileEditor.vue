@@ -507,66 +507,76 @@ const getFileName = (filePath: string): string => {
 };
 
 // ==================== 编辑器操作 ====================
-const initEditor = () => {
-  if (!editorContainer.value) return;
-  
-  // 销毁旧编辑器
-  if (editor.value) {
-    editor.value.dispose();
-    editor.value = null;
-  }
-
-  nextTick(() => {
-    if (!editorContainer.value) return;
+const initEditor = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (!editorContainer.value) {
+      resolve();
+      return;
+    }
     
-    editor.value = monaco.editor.create(editorContainer.value, {
-      value: currentFile.value?.content || '',
-      language: config.value.language,
-      theme: config.value.theme,
-      automaticLayout: true,
-      fontSize: 14,
-      lineNumbers: 'on',
-      minimap: { enabled: config.value.minimap },
-      wordWrap: config.value.wordWrap,
-      scrollBeyondLastLine: false,
-      renderWhitespace: 'selection',
-      tabSize: 4,
-      insertSpaces: true,
-      folding: true,
-      foldingStrategy: 'auto',
-      showFoldingControls: 'mouseover',
-      matchBrackets: 'always',
-      autoClosingBrackets: 'always',
-      autoClosingQuotes: 'always',
-      formatOnPaste: true,
-      formatOnType: true,
-    });
-
-    // 设置换行符
-    if (currentFile.value) {
-      editor.value.getModel()?.setEOL(config.value.eol);
+    // 销毁旧编辑器
+    if (editor.value) {
+      editor.value.dispose();
+      editor.value = null;
     }
 
-    // 监听内容变化
-    editor.value.onDidChangeModelContent(() => {
-      if (editor.value && currentFile.value) {
-        const newContent = editor.value.getValue();
-        currentFile.value.content = newContent;
-        currentFile.value.modified = newContent !== currentFile.value.originalContent;
+    nextTick(() => {
+      if (!editorContainer.value) {
+        resolve();
+        return;
       }
-    });
+      
+      editor.value = monaco.editor.create(editorContainer.value, {
+        value: currentFile.value?.content || '',
+        language: config.value.language,
+        theme: config.value.theme,
+        automaticLayout: true,
+        fontSize: 14,
+        lineNumbers: 'on',
+        minimap: { enabled: config.value.minimap },
+        wordWrap: config.value.wordWrap,
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'selection',
+        tabSize: 4,
+        insertSpaces: true,
+        folding: true,
+        foldingStrategy: 'auto',
+        showFoldingControls: 'mouseover',
+        matchBrackets: 'always',
+        autoClosingBrackets: 'always',
+        autoClosingQuotes: 'always',
+        formatOnPaste: true,
+        formatOnType: true,
+      });
 
-    // 监听光标位置
-    editor.value.onDidChangeCursorPosition((e) => {
-      cursorPosition.value = {
-        line: e.position.lineNumber,
-        column: e.position.column,
-      };
-    });
+      // 设置换行符
+      if (currentFile.value) {
+        editor.value.getModel()?.setEOL(config.value.eol);
+      }
 
-    // 快捷键保存
-    editor.value.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      saveCurrentFile();
+      // 监听内容变化
+      editor.value.onDidChangeModelContent(() => {
+        if (editor.value && currentFile.value) {
+          const newContent = editor.value.getValue();
+          currentFile.value.content = newContent;
+          currentFile.value.modified = newContent !== currentFile.value.originalContent;
+        }
+      });
+
+      // 监听光标位置
+      editor.value.onDidChangeCursorPosition((e) => {
+        cursorPosition.value = {
+          line: e.position.lineNumber,
+          column: e.position.column,
+        };
+      });
+
+      // 快捷键保存
+      editor.value.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        saveCurrentFile();
+      });
+
+      resolve();
     });
   });
 };
@@ -923,8 +933,8 @@ const startResize = (e: MouseEvent) => {
 };
 
 // ==================== 对话框操作 ====================
-const onOpened = () => {
-  initEditor();
+const onOpened = async () => {
+  await initEditor();
   if (props.filePath) {
     const dirPath = getDirectoryPath(props.filePath);
     loadTreeData(dirPath);
