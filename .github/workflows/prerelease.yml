@@ -1,0 +1,157 @@
+name: Build and Pre-release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get build info
+        id: build_info
+        run: |
+          # 生成构建时间
+          BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S %Z')
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
+          
+          # 获取短 commit hash
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          echo "commit_short=$COMMIT_SHORT" >> $GITHUB_OUTPUT
+          
+          # 获取完整 commit hash
+          COMMIT_FULL=$(git rev-parse HEAD)
+          echo "commit_full=$COMMIT_FULL" >> $GITHUB_OUTPUT
+          
+          # 获取 commit 信息
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          
+          # 生成版本号 (使用时间戳)
+          VERSION="pre-release-$(date '+%Y%m%d-%H%M%S')"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Build Info:"
+          echo "  Version: $VERSION"
+          echo "  Build Time: $BUILD_TIME"
+          echo "  Commit: $COMMIT_SHORT ($COMMIT_MSG)"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build:pro
+          mkdir -p ../core/routes/web/dist
+          cp -r dist/* ../core/routes/web/dist/
+
+      - name: Build Linux amd64
+        run: |
+          mkdir -p build/linux-amd64
+          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.Version=${{ steps.build_info.outputs.version }} -X main.BuildTime=${{ steps.build_info.outputs.build_time }} -X main.Commit=${{ steps.build_info.outputs.commit_short }}" -o ../build/linux-amd64/gpanel .
+          cd ../agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpanel-agent .
+          cd ../tools && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpctl gpctl.go
+
+      - name: Build Linux arm64
+        run: |
+          mkdir -p build/linux-arm64
+          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.Version=${{ steps.build_info.outputs.version }} -X main.BuildTime=${{ steps.build_info.outputs.build_time }} -X main.Commit=${{ steps.build_info.outputs.commit_short }}" -o ../build/linux-arm64/gpanel .
+          cd ../agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpanel-agent .
+          cd ../tools && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpctl gpctl.go
+
+      - name: Build Windows amd64
+        run: |
+          mkdir -p build/windows-amd64
+          cd core && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.Version=${{ steps.build_info.outputs.version }} -X main.BuildTime=${{ steps.build_info.outputs.build_time }} -X main.Commit=${{ steps.build_info.outputs.commit_short }}" -o ../build/windows-amd64/gpanel.exe .
+          cd ../agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpanel-agent.exe .
+          cd ../tools && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpctl.exe gpctl.go
+
+      - name: Create archives
+        run: |
+          cd build
+          tar -czvf gpanel-linux-amd64.tar.gz linux-amd64/
+          tar -czvf gpanel-linux-arm64.tar.gz linux-arm64/
+          cd windows-amd64 && zip -r ../gpanel-windows-amd64.zip .
+
+      - name: Generate checksums
+        run: |
+          cd build
+          sha256sum gpanel-linux-amd64.tar.gz > checksums.txt
+          sha256sum gpanel-linux-arm64.tar.gz >> checksums.txt
+          sha256sum gpanel-windows-amd64.zip >> checksums.txt
+
+      - name: Delete old pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 查找并删除旧的 pre-release
+          OLD_RELEASE=$(gh release list --repo ${{ github.repository }} --json tagName,isPrerelease --jq '.[] | select(.isPrerelease == true and (.tagName | startswith("pre-release-"))) | .tagName' | head -1)
+          
+          if [ -n "$OLD_RELEASE" ]; then
+            echo "Deleting old pre-release: $OLD_RELEASE"
+            gh release delete "$OLD_RELEASE" --repo ${{ github.repository }} --yes --cleanup-tag
+          else
+            echo "No old pre-release found"
+          fi
+
+      - name: Create Pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.build_info.outputs.version }}
+          name: GPanel Pre-release ${{ steps.build_info.outputs.build_time }}
+          body: |
+            ## GPanel 预发布版本
+            
+            > **注意**: 这是一个预发布版本，可能包含未完成的功能、Bug 或不稳定的内容。不建议在生产环境中使用。
+            
+            ### 构建信息
+            
+            | 项目 | 内容 |
+            | --- | --- |
+            | **构建时间** | ${{ steps.build_info.outputs.build_time }} |
+            | **Commit** | `${{ steps.build_info.outputs.commit_short }}` |
+            | **Commit Hash** | `${{ steps.build_info.outputs.commit_full }}` |
+            | **Commit Message** | ${{ steps.build_info.outputs.commit_msg }} |
+            
+            ### 下载说明
+            
+            请根据您的系统架构选择对应的压缩包：
+            - **Linux x86_64**: `gpanel-linux-amd64.tar.gz`
+            - **Linux ARM64**: `gpanel-linux-arm64.tar.gz`
+            - **Windows x86_64**: `gpanel-windows-amd64.zip`
+            
+            ### 安装方式
+            
+            可以使用管理脚本安装预发布版本：
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install-pre
+            ```
+            
+            ### 更新日志
+            
+            查看最新的代码变更：[Compare](${{ github.event.compare_url }})
+          files: |
+            build/gpanel-linux-amd64.tar.gz
+            build/gpanel-linux-arm64.tar.gz
+            build/gpanel-windows-amd64.zip
+            build/checksums.txt
+          prerelease: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

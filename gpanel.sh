@@ -375,6 +375,22 @@ get_install_time() {
     fi
 }
 
+# 检查是否为预发布版本
+is_prerelease_version() {
+    if [ -f "$INSTALL_INFO_FILE" ]; then
+        local is_pre=$(grep -oP '^is_prerelease=\K.*' "$INSTALL_INFO_FILE" 2>/dev/null || echo "false")
+        if [ "$is_pre" = "true" ]; then
+            return 0
+        fi
+    fi
+    # 也通过版本号判断
+    local version=$(get_installed_version)
+    if [[ "$version" =~ ^pre-release- ]]; then
+        return 0
+    fi
+    return 1
+}
+
 # 检查服务运行状态
 get_service_status() {
     local service=$1
@@ -418,7 +434,15 @@ print_status() {
     
     if is_installed; then
         echo -e "${GREEN}● 安装状态:${NC} 已安装"
-        echo -e "  安装版本: $(get_installed_version)"
+        local installed_version=$(get_installed_version)
+        
+        # 检查是否为预发布版本
+        if is_prerelease_version; then
+            echo -e "  安装版本: ${YELLOW}$installed_version${NC} ${RED}(预发布版本)${NC}"
+        else
+            echo -e "  安装版本: ${GREEN}$installed_version${NC}"
+        fi
+        
         echo -e "  安装时间: $(get_install_time)"
         echo -e "  安装目录: $INSTALL_DIR"
         echo -e "  数据目录: $DATA_DIR"
@@ -592,6 +616,62 @@ get_available_versions() {
     
     if response=$($fetch_cmd "$api_url" 2>/dev/null); then
         echo "$response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+'
+        return 0
+    fi
+    
+    return 1
+}
+
+# 获取预发布版本
+get_prerelease_version() {
+    log_info "获取预发布版本..." >&2
+    
+    local api_url="${GITHUB_API}/${GITHUB_REPO}/releases"
+    local response
+    
+    # 支持 wget 和 curl
+    local fetch_cmd=""
+    if command -v wget >/dev/null 2>&1; then
+        fetch_cmd="wget -q -T 30 -O -"
+    elif command -v curl >/dev/null 2>&1; then
+        fetch_cmd="curl -fsSL --connect-timeout 30 --max-time 60"
+    else
+        echo ""
+        return 1
+    fi
+    
+    # 尝试使用 GitHub API 获取预发布版本
+    if response=$($fetch_cmd "$api_url" 2>/dev/null); then
+        # 查找 pre-release 标记的版本
+        local prerelease_version=$(echo "$response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' | grep "^pre-release-" | head -1)
+        if [ -n "$prerelease_version" ]; then
+            echo "$prerelease_version"
+            return 0
+        fi
+    fi
+    
+    echo ""
+    return 1
+}
+
+# 获取预发布版本信息
+get_prerelease_info() {
+    local version=$1
+    local api_url="${GITHUB_API}/${GITHUB_REPO}/releases/tags/${version}"
+    local response
+    
+    # 支持 wget 和 curl
+    local fetch_cmd=""
+    if command -v wget >/dev/null 2>&1; then
+        fetch_cmd="wget -q -T 30 -O -"
+    elif command -v curl >/dev/null 2>&1; then
+        fetch_cmd="curl -fsSL --connect-timeout 30 --max-time 60"
+    else
+        return 1
+    fi
+    
+    if response=$($fetch_cmd "$api_url" 2>/dev/null); then
+        echo "$response"
         return 0
     fi
     
@@ -985,6 +1065,257 @@ print_install_success() {
 # ============================================================
 # 命令处理函数
 # ============================================================
+
+do_install_pre() {
+    print_banner
+    
+    # 显示预发布版本警告
+    echo -e "${YELLOW}========================================${NC}"
+    echo -e "${YELLOW}    预发布版本安装警告${NC}"
+    echo -e "${YELLOW}========================================${NC}"
+    echo ""
+    echo -e "${RED}警告: 您即将安装预发布版本！${NC}"
+    echo ""
+    echo -e "${YELLOW}预发布版本可能存在以下问题:${NC}"
+    echo -e "  ${RED}●${NC} 可能包含未完成的功能"
+    echo -e "  ${RED}●${NC} 可能存在未发现的 Bug"
+    echo -e "  ${RED}●${NC} 可能存在稳定性问题"
+    echo -e "  ${RED}●${NC} 可能与正式版不兼容"
+    echo -e "  ${RED}●${NC} 不建议在生产环境中使用"
+    echo ""
+    echo -e "${GREEN}预发布版本包含:${NC}"
+    echo -e "  ${GREEN}●${NC} 最新的功能特性"
+    echo -e "  ${GREEN}●${NC} 最新的 Bug 修复"
+    echo -e "  ${GREEN}●${NC} 开发中的新功能预览"
+    echo ""
+    
+    if ! confirm "确认安装预发布版本?"; then
+        log_info "安装已取消"
+        exit 0
+    fi
+    
+    # 检查是否已安装
+    if is_installed; then
+        local installed_version=$(get_installed_version)
+        log_warn "GPanel 已安装 (当前版本: $installed_version)"
+        echo ""
+        
+        # 检查是否已经是预发布版本
+        if [[ "$installed_version" =~ ^pre-release- ]]; then
+            log_info "当前已安装预发布版本"
+            if ! confirm "是否更新到最新的预发布版本?"; then
+                log_info "安装已取消"
+                exit 0
+            fi
+        else
+            if ! confirm "是否覆盖当前安装的正式版本?"; then
+                log_info "安装已取消"
+                exit 0
+            fi
+        fi
+    fi
+    
+    # 检查操作系统和架构
+    check_os
+    check_arch
+    
+    # 检查依赖
+    log_info "检查依赖..."
+    if ! command -v curl >/dev/null 2>&1; then
+        log_error "未安装 curl，请先安装 curl"
+        exit 1
+    fi
+    
+    # 获取预发布版本
+    local prerelease_version=$(get_prerelease_version)
+    
+    if [ -z "$prerelease_version" ]; then
+        log_error "未找到预发布版本"
+        log_info "请确保仓库中有预发布版本，或者使用 'sudo ./gpanel.sh install' 安装正式版本"
+        exit 1
+    fi
+    
+    VERSION="$prerelease_version"
+    
+    # 获取预发布版本信息
+    local release_info=$(get_prerelease_info "$VERSION")
+    local build_time=""
+    local commit_short=""
+    local commit_msg=""
+    
+    if [ -n "$release_info" ]; then
+        # 尝试从 release body 中解析信息
+        build_time=$(echo "$release_info" | grep -oP '\*\*构建时间\*\*\s*\|\s*\K[^|]+' | xargs || echo "未知")
+        commit_short=$(echo "$release_info" | grep -oP '\*\*Commit\*\*\s*\|\s*`\K[^`]+' || echo "未知")
+        commit_msg=$(echo "$release_info" | grep -oP '\*\*Commit Message\*\*\s*\|\s*\K.*' | xargs || echo "未知")
+    fi
+    
+    # 显示安装信息
+    echo ""
+    echo -e "${CYAN}==================== 预发布版本信息 ====================${NC}"
+    echo ""
+    echo -e "  版本: ${GREEN}$VERSION${NC}"
+    if [ -n "$build_time" ] && [ "$build_time" != "未知" ]; then
+        echo -e "  构建时间: ${GREEN}$build_time${NC}"
+    fi
+    if [ -n "$commit_short" ] && [ "$commit_short" != "未知" ]; then
+        echo -e "  Commit: ${GREEN}$commit_short${NC}"
+    fi
+    if [ -n "$commit_msg" ] && [ "$commit_msg" != "未知" ]; then
+        echo -e "  Commit Message: ${GREEN}$commit_msg${NC}"
+    fi
+    echo -e "  架构: ${GREEN}$ARCH${NC}"
+    echo -e "  安装目录: ${GREEN}$INSTALL_DIR${NC}"
+    echo -e "  数据目录: ${GREEN}$DATA_DIR${NC}"
+    echo -e "  日志目录: ${GREEN}$LOG_DIR${NC}"
+    echo ""
+    echo -e "${YELLOW}注意: 这是一个预发布版本，可能不稳定！${NC}"
+    echo ""
+    
+    if ! confirm "确认开始安装预发布版本?"; then
+        log_info "安装已取消"
+        exit 0
+    fi
+    
+    # 下载二进制文件
+    download_binaries "$VERSION"
+    
+    # 安装二进制文件
+    install_binaries
+    
+    # 创建 systemd 服务
+    create_systemd_services
+    
+    # 检测数据库是否存在
+    local DB_EXISTS=false
+    if [ -f "$DATA_DIR/gpanel.db" ]; then
+        DB_EXISTS=true
+        log_info "检测到已存在的数据库，保留原有配置"
+    fi
+    
+    # 启动服务
+    start_services
+    
+    # 检测是否为全新安装
+    if [ "$DB_EXISTS" = false ]; then
+        log_step "检测到全新安装，正在初始化安全配置..."
+        
+        log_info "等待服务初始化..."
+        sleep 5
+        
+        local wait_count=0
+        while [ ! -f "$DATA_DIR/gpanel.db" ] && [ $wait_count -lt 30 ]; do
+            sleep 1
+            ((wait_count++))
+        done
+        
+        if [ -f "$DATA_DIR/gpanel.db" ]; then
+            log_info "数据库已初始化"
+            
+            if command -v gpctl >/dev/null 2>&1; then
+                log_info "正在生成随机端口和安全入口..."
+                gpctl init-security
+                
+                log_info "正在重置管理员密码..."
+                RESET_OUTPUT=$(gpctl reset password --quiet 2>/dev/null)
+                if [ -n "$RESET_OUTPUT" ]; then
+                    RESET_USERNAME=$(echo "$RESET_OUTPUT" | awk '{print $1}')
+                    RESET_PASSWORD=$(echo "$RESET_OUTPUT" | awk '{print $2}')
+                    log_info "管理员密码已重置"
+                fi
+            else
+                log_warn "gpctl 命令不可用，跳过安全配置初始化"
+            fi
+        else
+            log_warn "数据库初始化超时，跳过安全配置"
+        fi
+    fi
+    
+    # 配置防火墙
+    configure_firewall
+    
+    # 保存安装信息，标记为预发布版本
+    save_install_info "$VERSION"
+    echo "is_prerelease=true" >> "$INSTALL_INFO_FILE"
+    
+    # 清理临时文件
+    cleanup_temp
+    
+    # 显示成功信息
+    print_install_pre_success
+}
+
+print_install_pre_success() {
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}预发布版本安装成功！${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo -e "${GREEN}安装版本:${NC} $VERSION ${YELLOW}(预发布版本)${NC}"
+    echo ""
+    
+    # 使用 gpctl 显示连接信息
+    if command -v gpctl >/dev/null 2>&1; then
+        gpctl init-security --show
+    else
+        # 备用方案
+        local core_port=$(get_core_port)
+        local security_entrance=$(get_security_entrance)
+        
+        SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+        if [ -z "$SERVER_IP" ]; then
+            SERVER_IP="your-server-ip"
+        fi
+        
+        LOCAL_IP=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -1)
+        fi
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP="$SERVER_IP"
+        fi
+        
+        echo -e "${GREEN}访问地址:${NC}"
+        if [ "$security_entrance" != "/" ]; then
+            echo "  安全入口: ${security_entrance}"
+            echo "  本地访问: http://${LOCAL_IP}:${core_port}${security_entrance}"
+            echo "  外部访问: http://${SERVER_IP}:${core_port}${security_entrance}"
+        else
+            echo "  本地访问: http://${LOCAL_IP}:${core_port}"
+            echo "  外部访问: http://${SERVER_IP}:${core_port}"
+        fi
+    fi
+    
+    # 显示账号密码
+    echo ""
+    echo -e "${GREEN}登录信息:${NC}"
+    if [ -n "$RESET_USERNAME" ] && [ -n "$RESET_PASSWORD" ]; then
+        echo -e "  用户名: ${CYAN}${RESET_USERNAME}${NC}"
+        echo -e "  密码: ${CYAN}${RESET_PASSWORD}${NC}"
+    else
+        echo -e "  用户名: ${CYAN}admin${NC}"
+        echo -e "  密码: ${CYAN}admin123${NC}"
+        echo -e "  ${YELLOW}提示: 请使用 'gpctl reset password' 重置密码${NC}"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}========================================${NC}"
+    echo -e "${YELLOW}预发布版本注意事项:${NC}"
+    echo -e "${YELLOW}========================================${NC}"
+    echo ""
+    echo -e "  ${RED}●${NC} 此版本可能不稳定，请谨慎使用"
+    echo -e "  ${RED}●${NC} 如遇问题，可通过 'sudo ./gpanel.sh uninstall' 卸载"
+    echo -e "  ${RED}●${NC} 建议安装正式版: 'sudo ./gpanel.sh install'"
+    echo ""
+    echo -e "${GREEN}服务管理:${NC}"
+    echo "  sudo ./gpanel.sh update        # 更新到正式版本"
+    echo "  sudo ./gpanel.sh install-pre   # 更新到最新预发布版本"
+    echo "  sudo ./gpanel.sh uninstall     # 卸载"
+    echo ""
+    echo -e "${GREEN}查看日志:${NC}"
+    echo "  sudo journalctl -u gpanel -u gpanel-agent -f"
+    echo ""
+}
 
 do_install() {
     local target_version="${1:-}"
@@ -1521,9 +1852,14 @@ do_help() {
     echo ""
     echo -e "${CYAN}命令:${NC}"
     echo ""
-    echo -e "  ${GREEN}install [version]${NC}    安装 GPanel"
+    echo -e "  ${GREEN}install [version]${NC}    安装 GPanel 正式版本"
     echo "                      不指定版本则交互式选择版本"
     echo "                      示例: sudo ./gpanel.sh install v1.0.0"
+    echo ""
+    echo -e "  ${GREEN}install-pre${NC}          安装 GPanel 预发布版本"
+    echo "                      ${YELLOW}警告: 预发布版本可能不稳定${NC}"
+    echo "                      包含最新功能和 Bug 修复"
+    echo "                      不建议在生产环境使用"
     echo ""
     echo -e "  ${GREEN}update [version]${NC}     更新 GPanel"
     echo "                      不指定版本则交互式选择版本"
@@ -1537,6 +1873,19 @@ do_help() {
     echo ""
     echo -e "  ${GREEN}help${NC}                 显示帮助信息"
     echo ""
+    echo -e "${CYAN}版本说明:${NC}"
+    echo ""
+    echo -e "  ${GREEN}正式版本${NC} (推荐)"
+    echo "      - 经过测试的稳定版本"
+    echo "      - 适合生产环境使用"
+    echo "      - 格式: v1.0.0, v1.1.0 等"
+    echo ""
+    echo -e "  ${YELLOW}预发布版本${NC} (开发版)"
+    echo "      - 包含最新的功能和修复"
+    echo "      - 可能存在 Bug 和不稳定因素"
+    echo "      - 仅用于测试和体验新功能"
+    echo "      - 格式: pre-release-YYYYMMDD-HHMMSS"
+    echo ""
     echo -e "${CYAN}交互式操作:${NC}"
     echo ""
     echo "  脚本支持交互式操作，包括:"
@@ -1547,11 +1896,14 @@ do_help() {
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo ""
-    echo "  # 交互式安装 (推荐)"
+    echo "  # 交互式安装正式版 (推荐)"
     echo "  sudo ./gpanel.sh install"
     echo ""
-    echo "  # 安装指定版本"
+    echo "  # 安装指定正式版本"
     echo "  sudo ./gpanel.sh install v1.0.0"
+    echo ""
+    echo "  # 安装预发布版本 (开发测试用)"
+    echo "  sudo ./gpanel.sh install-pre"
     echo ""
     echo "  # 交互式更新"
     echo "  sudo ./gpanel.sh update"
@@ -1586,6 +1938,10 @@ main() {
         install)
             check_root
             do_install "$@"
+            ;;
+        install-pre)
+            check_root
+            do_install_pre "$@"
             ;;
         update)
             check_root
