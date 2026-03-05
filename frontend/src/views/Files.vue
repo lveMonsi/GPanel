@@ -634,7 +634,8 @@ const editFile = (row: FileInfo) => {
   if (row.isDir) {
     return;
   }
-  editingFilePath.value = row.path;
+  // 将显示路径转换为后端路径
+  editingFilePath.value = toBackendPath(row.path);
   editorVisible.value = true;
 };
 
