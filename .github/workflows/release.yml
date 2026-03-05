@@ -16,10 +16,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Read version from .env
-        id: version
+      - name: Get build info
+        id: build_info
         run: |
+          # 设置时区为上海
+          sudo timedatectl set-timezone Asia/Shanghai
+          # 生成构建时间 (使用下划线替代空格，避免 ldflags 解析问题)
+          BUILD_TIME=$(date '+%Y-%m-%d_%H:%M:%S_%Z')
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
+          
+          # 获取短 commit hash
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          echo "commit_short=$COMMIT_SHORT" >> $GITHUB_OUTPUT
+          
+          # 获取完整 commit hash
+          COMMIT_FULL=$(git rev-parse HEAD)
+          echo "commit_full=$COMMIT_FULL" >> $GITHUB_OUTPUT
+          
+          # 获取 commit 信息
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          
+          # 获取版本号
           if [ -n "${{ github.event.inputs.version }}" ]; then
             VERSION="${{ github.event.inputs.version }}"
           elif [ -n "${{ github.ref_name }}" ]; then
@@ -28,7 +49,11 @@ jobs:
             VERSION=$(grep -oP 'VERSION=\K.*' .env)
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          
+          echo "Build Info:"
+          echo "  Version: $VERSION"
+          echo "  Build Time: $BUILD_TIME"
+          echo "  Commit: $COMMIT_SHORT ($COMMIT_MSG)"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -86,8 +111,45 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: GPanel ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.build_info.outputs.version }}
+          name: GPanel ${{ steps.build_info.outputs.version }}
+          body: |
+            ## GPanel 正式版
+            
+            ### 构建信息
+            
+            | 项目 | 内容 |
+            | --- | --- |
+            | **版本号** | ${{ steps.build_info.outputs.version }} |
+            | **构建时间** | ${{ steps.build_info.outputs.build_time }} |
+            | **Commit** | `${{ steps.build_info.outputs.commit_short }}` |
+            | **Commit Hash** | `${{ steps.build_info.outputs.commit_full }}` |
+            | **Commit Message** | ${{ steps.build_info.outputs.commit_msg }} |
+            
+            ### 下载说明
+            
+            请根据您的系统架构选择对应的压缩包：
+            - **Linux x86_64**: `gpanel-linux-amd64.tar.gz`
+            - **Linux ARM64**: `gpanel-linux-arm64.tar.gz`
+            - **Windows x86_64**: `gpanel-windows-amd64.zip`
+            
+            ### 安装方式
+            
+            #### 使用安装脚本（推荐）
+            
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
+            ```
+            
+            #### 手动安装
+            
+            1. 下载对应平台的压缩包
+            2. 解压到目标目录
+            3. 运行 `gpanel-agent` 和 `gpanel`
+            
+            ### 更新日志
+            
+            <!-- 自动生成的更新日志将在下方显示 -->
           files: |
             build/gpanel-linux-amd64.tar.gz
             build/gpanel-linux-arm64.tar.gz
