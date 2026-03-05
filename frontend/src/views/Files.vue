@@ -639,22 +639,8 @@ const editFile = (row: FileInfo) => {
   editorVisible.value = true;
 };
 
-const handleEditorSave = async (content: string) => {
-  try {
-    const backendPath = toBackendPath(editingFilePath.value);
-    const response = await fileApi.saveFileContent({
-      path: backendPath,
-      content,
-    });
-    if (response.data.code === 200) {
-      ElMessage.success('保存成功');
-      editorVisible.value = false;
-    } else {
-      ElMessage.error(response.data.message);
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || '保存失败');
-  }
+const handleEditorSave = () => {
+  loadFileList();
 };
 
 const downloadFile = async (row: FileInfo) => {
