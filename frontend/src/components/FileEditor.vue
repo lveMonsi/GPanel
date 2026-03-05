@@ -395,7 +395,7 @@ const eols = [
 ];
 
 // ==================== 状态定义 ====================
-const dialogVisible = ref(false);
+const dialogVisible = ref(props.visible);
 const loading = ref(false);
 const saving = ref(false);
 const creating = ref(false);
