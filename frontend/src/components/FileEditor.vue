@@ -1,11 +1,11 @@
 <template>
   <el-dialog
     v-model="dialogVisible"
-    title="文件编辑器"
     width="95%"
     :close-on-click-modal="false"
     class="file-editor-dialog"
     :fullscreen="isFullscreen"
+    :show-close="false"
     @close="handleClose"
     @opened="onOpened"
   >
@@ -1004,16 +1004,35 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.file-editor-dialog :deep(.el-dialog) {
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
 .file-editor-dialog :deep(.el-dialog__header) {
   padding: 0;
   margin: 0;
+  flex-shrink: 0;
 }
 
 .file-editor-dialog :deep(.el-dialog__body) {
   padding: 0;
-  height: calc(100vh - 120px);
+  flex: 1;
+  min-height: 400px;
   display: flex;
   flex-direction: column;
+  background: #fff;
+  overflow: hidden;
+}
+
+.file-editor-dialog :deep(.el-dialog.is-fullscreen) {
+  max-height: 100vh;
+}
+
+.file-editor-dialog :deep(.el-dialog.is-fullscreen .el-dialog__body) {
+  min-height: unset;
 }
 
 .dialog-header {
@@ -1021,8 +1040,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .dialog-title {
@@ -1041,8 +1060,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .toolbar-left {
@@ -1065,6 +1084,7 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 300px;
 }
 
 .file-tree-panel {
@@ -1074,7 +1094,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: #fafafa;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid #f0f0f0;
+  flex-shrink: 0;
 }
 
 .tree-header {
@@ -1125,8 +1146,8 @@ onBeforeUnmount(() => {
 .tabs-container {
   display: flex;
   align-items: center;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .tabs-container :deep(.el-tabs) {
@@ -1162,6 +1183,7 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 200px;
 }
 
 .empty-editor {
@@ -1174,6 +1196,7 @@ onBeforeUnmount(() => {
 .monaco-container {
   width: 100%;
   height: 100%;
+  min-height: 200px;
 }
 
 .editor-footer {
@@ -1181,8 +1204,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 4px 16px;
-  background: #f5f7fa;
-  border-top: 1px solid #e4e7ed;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
   font-size: 12px;
   color: #606266;
 }
