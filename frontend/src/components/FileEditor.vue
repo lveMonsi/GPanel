@@ -367,12 +367,7 @@ const languages = [
 // 换行符选项 - 使用数值常量 (LF=0, CRLF=1)
 const EOL_LF = 0;
 const EOL_CRLF = 1;
-// 换行符选项 - 使用数值常量 (LF=0, CRLF=1)
-const EOL_LF = 0;
-const EOL_CRLF = 1;
 const eols = [
-  { label: 'LF (Linux/macOS)', value: EOL_LF },
-  { label: 'CRLF (Windows)', value: EOL_CRLF },
   { label: 'LF (Linux/macOS)', value: EOL_LF },
   { label: 'CRLF (Windows)', value: EOL_CRLF },
 ];
