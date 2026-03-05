@@ -40,10 +40,23 @@ jobs:
           VERSION="pre-release-$(date '+%Y%m%d-%H%M%S')"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
+          # 获取最新的正式版标签（排除 pre-release 标签）
+          LATEST_RELEASE_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+          if [ -z "$LATEST_RELEASE_TAG" ]; then
+            # 如果没有正式版标签，使用第一个 commit
+            LATEST_RELEASE_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "latest_release_tag=$LATEST_RELEASE_TAG" >> $GITHUB_OUTPUT
+          
+          # 生成 compare URL
+          COMPARE_URL="https://github.com/${{ github.repository }}/compare/${LATEST_RELEASE_TAG}...${COMMIT_SHORT}"
+          echo "compare_url=$COMPARE_URL" >> $GITHUB_OUTPUT
+          
           echo "Build Info:"
           echo "  Version: $VERSION"
           echo "  Build Time: $BUILD_TIME"
           echo "  Commit: $COMMIT_SHORT ($COMMIT_MSG)"
+          echo "  Latest Release Tag: $LATEST_RELEASE_TAG"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -147,7 +160,7 @@ jobs:
             
             ### 更新日志
             
-            查看最新的代码变更：[Compare](${{ github.event.compare_url }})
+            查看从上个正式版 `${{ steps.build_info.outputs.latest_release_tag }}` 到当前预发布版本的代码变更：[Compare](${{ steps.build_info.outputs.compare_url }})
           files: |
             build/gpanel-linux-amd64.tar.gz
             build/gpanel-linux-arm64.tar.gz
