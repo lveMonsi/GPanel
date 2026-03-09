@@ -596,29 +596,12 @@ func updatePassword() {
 		os.Exit(1)
 	}
 
-	currentPassword := getConfig("PanelPassword", "admin123")
-
 	fmt.Println("=== 更新面板密码 ===")
 	fmt.Println()
 
-	// 读取当前密码
-	fmt.Print("请输入当前密码: ")
-	reader := bufio.NewReader(os.Stdin)
-	currentInput, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Printf("读取输入失败: %v\n", err)
-		os.Exit(1)
-	}
-	currentInput = strings.TrimSpace(currentInput)
-
-	// 验证当前密码
-	if currentInput != currentPassword {
-		fmt.Println("错误: 当前密码不正确")
-		os.Exit(1)
-	}
-
 	// 读取新密码
 	fmt.Print("请输入新密码: ")
+	reader := bufio.NewReader(os.Stdin)
 	newPassword, err := reader.ReadString('\n')
 	if err != nil {
 		fmt.Printf("读取输入失败: %v\n", err)
