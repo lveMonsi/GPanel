@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="dialogVisible"
-    width="95%"
+    width="70%"
     :close-on-click-modal="false"
     class="file-editor-dialog"
     :fullscreen="isFullscreen"
@@ -11,17 +11,16 @@
   >
     <template #header>
       <div class="dialog-header">
-        <span class="dialog-title">{{ currentFile?.name || '文件编辑器' }}</span>
+        <span class="dialog-title" :title="currentFile?.path || ''">{{ currentFile?.path || '文件编辑器' }}</span>
         <div class="header-actions">
           <el-button
             v-if="!isMobile"
+            class="header-btn"
             :icon="isFullscreen ? 'FullScreen' : 'FullScreen'"
             text
             @click="toggleFullscreen"
-          >
-            {{ isFullscreen ? '退出全屏' : '全屏' }}
-          </el-button>
-          <el-button :icon="'Close'" text @click="handleClose"></el-button>
+          ></el-button>
+          <el-button class="header-btn close-btn" :icon="'Close'" text @click="handleClose"></el-button>
         </div>
       </div>
     </template>
@@ -29,21 +28,15 @@
     <!-- 工具栏 -->
     <div class="editor-toolbar">
       <div class="toolbar-left">
-        <el-button text @click="handleReset" :disabled="!hasChanges">
-          <el-icon><RefreshRight /></el-icon>
-          重置
-        </el-button>
-        <el-divider direction="vertical" />
-        <el-button text @click="saveCurrentFile" :loading="saving">
-          <el-icon><DocumentChecked /></el-icon>
-          保存
-        </el-button>
-        <el-divider direction="vertical" />
-        <el-dropdown trigger="click" @command="changeTheme">
-          <el-button text>
-            主题: {{ currentThemeLabel }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
+        <el-text class="toolbar-text" @click="handleReset" :class="{ 'is-disabled': !hasChanges }">重置</el-text>
+        <el-divider direction="vertical" class="toolbar-divider" />
+        <el-text class="toolbar-text" @click="saveCurrentFile">
+          <span v-if="saving">保存中...</span>
+          <span v-else>保存</span>
+        </el-text>
+        <el-divider direction="vertical" class="toolbar-divider" />
+        <el-dropdown trigger="click" placement="bottom-start" @command="changeTheme">
+          <span class="el-dropdown-link">主题</span>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item 
@@ -59,12 +52,9 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-divider direction="vertical" />
-        <el-dropdown trigger="click" @command="changeLanguage">
-          <el-button text>
-            语言: {{ config.language }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
+        <el-divider direction="vertical" class="toolbar-divider" />
+        <el-dropdown trigger="click" placement="bottom-start" @command="changeLanguage">
+          <span class="el-dropdown-link">语言</span>
           <template #dropdown>
             <el-dropdown-menu class="language-dropdown">
               <el-dropdown-item 
@@ -80,12 +70,9 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-divider direction="vertical" />
-        <el-dropdown trigger="click" @command="changeEOL">
-          <el-button text>
-            换行符: {{ config.eol === 0 ? 'LF' : 'CRLF' }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
+        <el-divider direction="vertical" class="toolbar-divider" />
+        <el-dropdown trigger="click" placement="bottom-start" @command="changeEOL">
+          <span class="el-dropdown-link">换行符</span>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item 
@@ -101,12 +88,9 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-divider direction="vertical" />
-        <el-dropdown trigger="click">
-          <el-button text>
-            设置
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
+        <el-divider direction="vertical" class="toolbar-divider" />
+        <el-dropdown trigger="click" placement="bottom-start">
+          <span class="el-dropdown-link">设置</span>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item @click="toggleMinimap">
@@ -136,21 +120,21 @@
       <!-- 左侧文件树 -->
       <div v-show="showFileTree" class="file-tree-panel">
         <div class="tree-header">
-          <el-button text size="small" @click="goToParentDir" :disabled="!canGoUp">
+          <el-text size="small" class="tree-header-btn" @click="goToParentDir" :class="{ 'is-disabled': !canGoUp }">
             <el-icon><Top /></el-icon>
-            上级
-          </el-button>
-          <el-divider direction="vertical" />
-          <el-button text size="small" @click="refreshTree">
+            <span class="tree-header-text">上级</span>
+          </el-text>
+          <el-divider direction="vertical" class="tree-divider-v" />
+          <el-text size="small" class="tree-header-btn" @click="refreshTree">
             <el-icon><Refresh /></el-icon>
-            刷新
-          </el-button>
-          <el-divider direction="vertical" />
+            <span class="tree-header-text">刷新</span>
+          </el-text>
+          <el-divider direction="vertical" class="tree-divider-v" />
           <el-dropdown trigger="click" @command="handleCreateInTree">
-            <el-button text size="small">
+            <el-text size="small" class="tree-header-btn">
               新建
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
+            </el-text>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="dir">
@@ -178,21 +162,24 @@
           >
             <template #default="{ node, data }">
               <span class="tree-node">
-                <el-icon v-if="data.isDir" color="#409eff"><Folder /></el-icon>
-                <el-icon v-else color="#909399"><Document /></el-icon>
-                <span class="node-label">{{ node.label }}</span>
+                <el-icon v-if="data.isDir" class="tree-icon folder-icon"><Folder /></el-icon>
+                <el-icon v-else class="tree-icon file-icon"><Document /></el-icon>
+                <span class="node-label" :title="node.label">{{ node.label }}</span>
               </span>
             </template>
           </el-tree>
         </div>
       </div>
 
-      <!-- 拖拽分隔条 -->
-      <div 
-        v-show="showFileTree" 
-        class="resize-handle"
-        @mousedown="startResize"
-      ></div>
+      <!-- 分隔线 -->
+      <div v-if="showFileTree" class="tree-separator">
+        <el-icon
+          class="toggle-tree-icon"
+          @click="showFileTree = false"
+        >
+          <DArrowLeft />
+        </el-icon>
+      </div>
 
       <!-- 右侧编辑区 -->
       <div class="editor-panel">
@@ -220,19 +207,17 @@
               </template>
             </el-tab-pane>
           </el-tabs>
-          <el-button
-            class="toggle-tree-btn"
-            text
-            size="small"
-            @click="showFileTree = !showFileTree"
-          >
-            <el-icon v-if="showFileTree"><DArrowLeft /></el-icon>
-            <el-icon v-else><DArrowRight /></el-icon>
-          </el-button>
         </div>
 
         <!-- 编辑器容器 -->
         <div class="editor-wrapper">
+          <el-icon
+            v-if="!showFileTree"
+            class="show-tree-icon"
+            @click="showFileTree = true"
+          >
+            <DArrowRight />
+          </el-icon>
           <div v-if="fileTabs.length === 0" class="empty-editor">
             <el-empty description="请从左侧选择文件或关闭编辑器">
               <el-button type="primary" @click="showFileTree = true">显示文件树</el-button>
@@ -246,15 +231,64 @@
     <!-- 底部状态栏 -->
     <div class="editor-footer">
       <div class="footer-left">
-        <span>{{ currentFile?.path || '' }}</span>
+        <span class="footer-text">{{ currentFile?.path || '' }}</span>
         <el-tag v-if="currentFile?.truncated" type="warning" size="small">
           已截断
         </el-tag>
       </div>
       <div class="footer-right">
-        <span>行 {{ cursorPosition.line }}, 列 {{ cursorPosition.column }}</span>
-        <span>{{ config.eol === 1 ? 'LF' : 'CRLF' }}</span>
-        <span>UTF-8</span>
+        <el-divider direction="vertical" class="footer-divider" />
+        <el-dropdown trigger="click" placement="top" @command="changeTheme">
+          <span class="el-dropdown-link footer-link">
+            {{ currentThemeLabel }}
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="item in themes" :key="item.value" :command="item.value">
+                <div class="dropdown-item">
+                  <span>{{ item.label }}</span>
+                  <el-icon v-if="config.theme === item.value"><Check /></el-icon>
+                </div>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-divider direction="vertical" class="footer-divider" />
+        <el-dropdown trigger="click" placement="top" @command="changeEOL">
+          <span class="el-dropdown-link footer-link">
+            {{ config.eol === 0 ? 'CRLF' : 'LF' }}
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="item in eols" :key="item.value" :command="item.value">
+                <div class="dropdown-item">
+                  <span>{{ item.label }}</span>
+                  <el-icon v-if="config.eol === item.value"><Check /></el-icon>
+                </div>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-divider direction="vertical" class="footer-divider" />
+        <el-dropdown trigger="click" placement="top" @command="changeLanguage">
+          <span class="el-dropdown-link footer-link">
+            {{ config.language }}
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu class="language-dropdown">
+              <el-dropdown-item v-for="item in languages" :key="item.label" :command="item.label">
+                <div class="dropdown-item">
+                  <span>{{ item.label }}</span>
+                  <el-icon v-if="config.language === item.label"><Check /></el-icon>
+                </div>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-divider direction="vertical" class="footer-divider" />
+        <span class="footer-text">行 {{ cursorPosition.line }}, 列 {{ cursorPosition.column }}</span>
+        <el-divider direction="vertical" class="footer-divider" />
+        <span class="footer-text">UTF-8</span>
         <el-tag v-if="currentFile?.size" type="info" size="small">
           {{ formatSize(currentFile.size) }}
         </el-tag>
@@ -292,8 +326,6 @@ import {
   ArrowDown,
   Check,
   Loading,
-  RefreshRight,
-  DocumentChecked,
   Top,
   Refresh,
   FolderAdd,
@@ -1003,12 +1035,26 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+/* CSS变量定义 */
+.file-editor-dialog {
+  --editor-header-bg: var(--el-bg-color);
+  --editor-toolbar-bg: var(--el-fill-color-lighter);
+  --editor-footer-bg: var(--el-fill-color-lighter);
+  --editor-border-color: var(--el-border-color-lighter);
+  --editor-text-color: var(--el-text-color-regular);
+  --editor-text-secondary: var(--el-text-color-secondary);
+  --editor-primary: var(--el-color-primary);
+}
+
+/* 对话框基础样式 */
 .file-editor-dialog :deep(.el-dialog) {
-  background: #fff;
+  background: var(--editor-header-bg);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .file-editor-dialog :deep(.el-dialog__header) {
@@ -1023,53 +1069,118 @@ onBeforeUnmount(() => {
   min-height: 400px;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--editor-header-bg);
   overflow: hidden;
 }
 
 .file-editor-dialog :deep(.el-dialog.is-fullscreen) {
   max-height: 100vh;
+  border-radius: 0;
 }
 
 .file-editor-dialog :deep(.el-dialog.is-fullscreen .el-dialog__body) {
   min-height: unset;
 }
 
+/* 头部样式 */
 .dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--editor-header-bg);
+  border-bottom: 1px solid var(--editor-border-color);
 }
 
 .dialog-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--editor-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
 }
 
 .header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.toolbar-left {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
+.header-btn {
+  padding: 6px !important;
+  font-size: 18px !important;
+  color: var(--editor-text-secondary) !important;
+  
+  &:hover {
+    color: var(--editor-primary) !important;
+    background-color: var(--el-fill-color-light) !important;
+  }
+}
+
+.close-btn:hover {
+  color: var(--el-color-danger) !important;
+}
+
+/* 工具栏样式 */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--editor-toolbar-bg);
+  border-bottom: 1px solid var(--editor-border-color);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.toolbar-text {
+  cursor: pointer;
+  color: var(--editor-text-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  
+  &:hover {
+    color: var(--editor-primary);
+    background-color: var(--el-fill-color-light);
+  }
+  
+  &.is-disabled {
+    cursor: not-allowed;
+    color: var(--el-text-color-placeholder);
+    &:hover {
+      background-color: transparent;
+    }
+  }
+}
+
+.toolbar-divider {
+  margin: 0 4px;
+  height: 14px;
+}
+
+.el-dropdown-link {
+  cursor: pointer;
+  color: var(--editor-text-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  
+  &:hover {
+    color: var(--editor-primary);
+    background-color: var(--el-fill-color-light);
+  }
+}
+
+/* 加载状态 */
 .loading-container {
   display: flex;
   flex-direction: column;
@@ -1077,9 +1188,10 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 100%;
   gap: 12px;
-  color: #909399;
+  color: var(--editor-text-secondary);
 }
 
+/* 主内容区 */
 .editor-main {
   flex: 1;
   display: flex;
@@ -1087,14 +1199,15 @@ onBeforeUnmount(() => {
   min-height: 300px;
 }
 
+/* 文件树面板 */
 .file-tree-panel {
-  width: 250px;
-  min-width: 150px;
-  max-width: 500px;
+  width: 220px;
+  min-width: 180px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
-  border-right: 1px solid #f0f0f0;
+  background: var(--el-bg-color);
+  border-right: 1px solid var(--editor-border-color);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -1102,8 +1215,41 @@ onBeforeUnmount(() => {
 .tree-header {
   display: flex;
   align-items: center;
-  padding: 8px;
-  gap: 4px;
+  justify-content: center;
+  padding: 6px 8px;
+  gap: 0;
+}
+
+.tree-header-btn {
+  cursor: pointer;
+  color: var(--editor-text-color);
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  
+  &:hover {
+    color: var(--editor-primary);
+    background-color: var(--el-fill-color-light);
+  }
+  
+  &.is-disabled {
+    cursor: not-allowed;
+    color: var(--el-text-color-placeholder);
+    &:hover {
+      background-color: transparent;
+    }
+  }
+}
+
+.tree-header-text {
+  margin-left: 2px;
+}
+
+.tree-divider-v {
+  margin: 0 4px;
+  height: 12px;
 }
 
 .tree-divider {
@@ -1113,78 +1259,154 @@ onBeforeUnmount(() => {
 .tree-content {
   flex: 1;
   overflow: auto;
-  padding: 8px;
+  padding: 4px 8px;
 }
 
 .tree-node {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 2px 0;
+}
+
+.tree-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.folder-icon {
+  color: var(--editor-primary);
+}
+
+.file-icon {
+  color: var(--editor-text-secondary);
 }
 
 .node-label {
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.resize-handle {
-  width: 4px;
-  cursor: col-resize;
-  background: transparent;
-  transition: background-color 0.2s;
+/* 分隔线 */
+.tree-separator {
+  position: relative;
+  width: 1px;
+  background-color: var(--editor-border-color);
+  flex-shrink: 0;
 }
 
-.resize-handle:hover {
-  background: #409eff;
+.toggle-tree-icon {
+  position: absolute;
+  top: 50%;
+  left: -9px;
+  transform: translateY(-50%);
+  cursor: pointer;
+  padding: 8px 2px;
+  background-color: var(--el-fill-color);
+  border-radius: 4px 0 0 4px;
+  color: var(--editor-text-secondary);
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: var(--el-fill-color-dark);
+    color: var(--editor-primary);
+  }
 }
 
+/* 编辑器面板 */
 .editor-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
+/* 标签页 */
 .tabs-container {
   display: flex;
   align-items: center;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--editor-toolbar-bg);
+  border-bottom: 1px solid var(--editor-border-color);
 }
 
 .tabs-container :deep(.el-tabs) {
   flex: 1;
-  margin-bottom: 0;
+  --el-tabs-header-height: 29px;
 }
 
 .tabs-container :deep(.el-tabs__header) {
   margin: 0;
   border-bottom: none;
+  height: 29px;
 }
 
 .tabs-container :deep(.el-tabs__nav-wrap) {
-  padding: 0 8px;
+  padding: 0 4px;
+  height: 28px;
+  line-height: 28px;
 }
 
-.toggle-tree-btn {
-  margin-right: 8px;
+.tabs-container :deep(.el-tabs__nav) {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.tabs-container :deep(.el-tabs__item) {
+  height: 28px;
+  line-height: 28px;
+  padding: 0 12px !important;
+  
+  &:hover {
+    color: var(--editor-primary) !important;
+  }
+  
+  &.is-active {
+    color: var(--editor-primary) !important;
+    background-color: var(--el-bg-color);
+    border-bottom: 2px solid var(--editor-primary);
+  }
 }
 
 .tab-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .modified-icon {
-  color: #e6a23c;
-  font-size: 12px;
+  color: var(--el-color-warning);
+  font-size: 10px;
 }
 
+/* 编辑器容器 */
 .editor-wrapper {
   flex: 1;
   display: flex;
   overflow: hidden;
   min-height: 200px;
+  position: relative;
+}
+
+.show-tree-icon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  padding: 16px 4px;
+  background-color: var(--el-fill-color);
+  border-radius: 0 4px 4px 0;
+  color: var(--editor-text-secondary);
+  z-index: 10;
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: var(--el-fill-color-dark);
+    color: var(--editor-primary);
+  }
 }
 
 .empty-editor {
@@ -1200,36 +1422,62 @@ onBeforeUnmount(() => {
   min-height: 200px;
 }
 
+/* 底部状态栏 */
 .editor-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 16px;
-  background: #fafafa;
-  border-top: 1px solid #f0f0f0;
+  padding: 0 12px;
+  height: 24px;
+  background: var(--editor-footer-bg);
+  border-top: 1px solid var(--editor-border-color);
   font-size: 12px;
-  color: #606266;
 }
 
 .footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
   flex: 1;
+  min-width: 0;
+}
+
+.footer-text {
+  color: var(--editor-text-secondary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .footer-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 0;
 }
 
+.footer-link {
+  color: var(--editor-text-secondary);
+  font-size: 12px;
+  
+  &:hover {
+    color: var(--editor-primary);
+  }
+}
+
+.footer-divider {
+  margin: 0 8px;
+  height: 12px;
+}
+
+/* 下拉菜单项 */
 .dropdown-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   width: 100%;
-  min-width: 120px;
+  min-width: 140px;
 }
 
 .language-dropdown :deep(.el-dropdown-menu) {
@@ -1244,5 +1492,13 @@ onBeforeUnmount(() => {
 
 .file-editor-dialog :deep(.monaco-editor .margin) {
   background: inherit;
+}
+
+/* 暗色主题下的样式调整 */
+.dark .file-editor-dialog {
+  --editor-header-bg: #1e1e1e;
+  --editor-toolbar-bg: #252526;
+  --editor-footer-bg: #252526;
+  --editor-border-color: #3c3c3c;
 }
 </style>
