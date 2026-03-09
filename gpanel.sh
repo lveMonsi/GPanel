@@ -4,6 +4,7 @@
 # 使用方法:
 #   安装最新版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/main/gpanel.sh | sudo bash -s -- install
 #   安装指定版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/main/gpanel.sh | sudo bash -s -- install v1.0.0
+#   国内镜像安装: curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/lveMonsi/GPanel/main/gpanel.sh | sudo bash -s -- install
 #   更新到最新:   sudo ./gpanel.sh update
 #   更新到指定:   sudo ./gpanel.sh update v1.0.0
 #   卸载:         sudo ./gpanel.sh uninstall
@@ -20,6 +21,9 @@ set -e
 GITHUB_REPO="lveMonsi/GPanel"
 GITHUB_API="https://api.github.com/repos"
 GITHUB_RELEASES="https://github.com"
+
+# GitHub 代理（国内加速）
+GITHUB_PROXY="https://gh.llkk.cc/"
 
 # 安装目录
 INSTALL_DIR="/opt/gpanel"
@@ -728,7 +732,7 @@ validate_version() {
     # 规范化版本号
     version=$(normalize_version "$version")
     
-    local download_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${version}/gpanel-linux-${ARCH}.tar.gz"
+    local download_url="${GITHUB_PROXY}${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${version}/gpanel-linux-${ARCH}.tar.gz"
     
     # 支持 wget 和 curl
     if command -v wget >/dev/null 2>&1; then
@@ -823,10 +827,10 @@ download_binaries() {
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR"
     
-    # 构建下载文件名和 URL
+    # 构建下载文件名和 URL（使用 GitHub 代理加速）
     local archive_name="gpanel-linux-${ARCH}.tar.gz"
-    local download_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/${archive_name}"
-    local checksum_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/checksums.txt"
+    local download_url="${GITHUB_PROXY}${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/${archive_name}"
+    local checksum_url="${GITHUB_PROXY}${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/checksums.txt"
     
     log_info "下载地址: $download_url"
     

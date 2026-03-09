@@ -141,6 +141,12 @@ jobs:
             curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
             ```
             
+            #### 国内镜像安装（加速）
+            
+            ```bash
+            curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
+            ```
+            
             #### 手动安装
             
             1. 下载对应平台的压缩包
