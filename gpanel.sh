@@ -1217,6 +1217,9 @@ do_install_pre() {
         exit 0
     fi
     
+    # 停止服务（避免覆盖正在运行的二进制文件）
+    stop_services
+    
     # 下载二进制文件
     download_binaries "$VERSION"
     
