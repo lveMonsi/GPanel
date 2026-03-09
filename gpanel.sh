@@ -349,6 +349,28 @@ press_any_key() {
 # 状态检测函数
 # ============================================================
 
+# 从数据库获取用户信息
+get_db_user_info() {
+    local db_file="$DATA_DIR/gpanel.db"
+    
+    if [ ! -f "$db_file" ]; then
+        return 1
+    fi
+    
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        return 1
+    fi
+    
+    DB_USERNAME=$(sqlite3 "$db_file" "SELECT value FROM settings WHERE key='PanelUser' LIMIT 1;" 2>/dev/null)
+    DB_PASSWORD=$(sqlite3 "$db_file" "SELECT value FROM settings WHERE key='PanelPassword' LIMIT 1;" 2>/dev/null)
+    
+    if [ -n "$DB_USERNAME" ] && [ -n "$DB_PASSWORD" ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
 # 检查是否已安装
 is_installed() {
     if [ -f "$INSTALL_DIR/gpanel" ] && [ -f "$INSTALL_DIR/gpanel-agent" ]; then
@@ -1057,10 +1079,12 @@ print_install_success() {
     if [ -n "$RESET_USERNAME" ] && [ -n "$RESET_PASSWORD" ]; then
         echo -e "  用户名: ${CYAN}${RESET_USERNAME}${NC}"
         echo -e "  密码: ${CYAN}${RESET_PASSWORD}${NC}"
+    elif get_db_user_info; then
+        echo -e "  用户名: ${CYAN}${DB_USERNAME}${NC}"
+        echo -e "  密码: ${CYAN}${DB_PASSWORD}${NC}"
     else
         echo -e "  用户名: ${CYAN}admin${NC}"
         echo -e "  密码: ${CYAN}admin123${NC}"
-        echo -e "  ${YELLOW}提示: 请使用 'gpctl reset password' 重置密码${NC}"
     fi
     
     echo ""
@@ -1304,10 +1328,12 @@ print_install_pre_success() {
     if [ -n "$RESET_USERNAME" ] && [ -n "$RESET_PASSWORD" ]; then
         echo -e "  用户名: ${CYAN}${RESET_USERNAME}${NC}"
         echo -e "  密码: ${CYAN}${RESET_PASSWORD}${NC}"
+    elif get_db_user_info; then
+        echo -e "  用户名: ${CYAN}${DB_USERNAME}${NC}"
+        echo -e "  密码: ${CYAN}${DB_PASSWORD}${NC}"
     else
         echo -e "  用户名: ${CYAN}admin${NC}"
         echo -e "  密码: ${CYAN}admin123${NC}"
-        echo -e "  ${YELLOW}提示: 请使用 'gpctl reset password' 重置密码${NC}"
     fi
     
     echo ""
