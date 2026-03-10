@@ -13,6 +13,27 @@
       </template>
     </el-alert>
 
+    <!-- 未安装防火墙提示 -->
+    <el-alert
+      v-else-if="!baseInfo.isExist"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 20px"
+    >
+      <template #title>
+        <span>系统未检测到防火墙管理工具</span>
+      </template>
+      <div style="margin-top: 8px">
+        请安装防火墙管理工具后再使用此功能。推荐安装：
+        <ul style="margin: 8px 0; padding-left: 20px">
+          <li><strong>ufw</strong> (Ubuntu/Debian): <code>apt install ufw</code></li>
+          <li><strong>firewalld</strong> (CentOS/RHEL): <code>yum install firewalld</code></li>
+          <li><strong>iptables</strong>: <code>apt install iptables</code> 或 <code>yum install iptables</code></li>
+        </ul>
+      </div>
+    </el-alert>
+
     <template v-else>
       <!-- 基础信息卡片 -->
       <el-card class="info-card" shadow="hover">
@@ -186,8 +207,8 @@ const checkOS = async () => {
   }
 };
 
-onMounted(() => {
-  checkOS();
+onMounted(async () => {
+  await checkOS();
   if (!isWindows.value) {
     loadBaseInfo();
   }

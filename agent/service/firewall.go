@@ -26,9 +26,18 @@ func NewFirewallService() *FirewallService {
 
 // LoadBaseInfo 加载防火墙基础信息
 func (s *FirewallService) LoadBaseInfo() (dto.FirewallBaseInfo, error) {
+	// 检测防火墙是否安装
+	firewallType, installed := firewall.CheckFirewallInstalled()
+	if !installed {
+		return dto.FirewallBaseInfo{
+			Name:    "未安装",
+			IsExist: false,
+		}, nil
+	}
+
 	if s.client == nil {
 		return dto.FirewallBaseInfo{
-			Name:    "-",
+			Name:    string(firewallType),
 			IsExist: false,
 		}, nil
 	}
@@ -36,6 +45,7 @@ func (s *FirewallService) LoadBaseInfo() (dto.FirewallBaseInfo, error) {
 	var baseInfo dto.FirewallBaseInfo
 	baseInfo.Version = "-"
 	baseInfo.Name = s.client.Name()
+	baseInfo.IsExist = true
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -54,7 +64,6 @@ func (s *FirewallService) LoadBaseInfo() (dto.FirewallBaseInfo, error) {
 		defer wg.Done()
 		isActive, _ := s.client.Status()
 		baseInfo.IsActive = isActive
-		baseInfo.IsExist = true
 	}()
 
 	wg.Wait()

@@ -972,25 +972,69 @@ EOF
 }
 
 configure_firewall() {
-    log_step "配置防火墙..."
+    log_step "检测防火墙状态..."
     
     # 获取实际端口
     local core_port=$(get_core_port)
     local agent_port=$(get_agent_port)
     
+    # 检测防火墙类型并保存到全局变量
+    FIREWALL_TYPE="none"
+    FIREWALL_AUTO_CONFIGURED=false
+    FIREWALL_CORE_PORT="$core_port"
+    FIREWALL_AGENT_PORT="$agent_port"
+    
     if command -v firewall-cmd >/dev/null 2>&1; then
-        # CentOS/RHEL/Fedora 使用 firewalld
-        firewall-cmd --permanent --add-port=${core_port}/tcp 2>/dev/null || true
-        firewall-cmd --permanent --add-port=${agent_port}/tcp 2>/dev/null || true
-        firewall-cmd --reload 2>/dev/null || true
-        log_info "firewalld 防火墙规则已添加 (端口: ${core_port}, ${agent_port})"
+        FIREWALL_TYPE="firewalld"
+        log_info "检测到 firewalld 防火墙"
+        
+        # 自动放行端口
+        log_info "正在自动放行端口 ${core_port} 和 ${agent_port}..."
+        if firewall-cmd --permanent --add-port=${core_port}/tcp 2>/dev/null; then
+            firewall-cmd --permanent --add-port=${agent_port}/tcp 2>/dev/null || true
+            firewall-cmd --reload 2>/dev/null || true
+            FIREWALL_AUTO_CONFIGURED=true
+            log_info "已自动放行端口 ${core_port} 和 ${agent_port}"
+        else
+            log_warn "自动放行失败，可能需要手动配置"
+        fi
+        
     elif command -v ufw >/dev/null 2>&1; then
-        # Ubuntu/Debian 使用 ufw
-        ufw allow ${core_port}/tcp 2>/dev/null || true
-        ufw allow ${agent_port}/tcp 2>/dev/null || true
-        log_info "ufw 防火墙规则已添加 (端口: ${core_port}, ${agent_port})"
+        FIREWALL_TYPE="ufw"
+        log_info "检测到 ufw 防火墙"
+        
+        # 自动放行端口
+        log_info "正在自动放行端口 ${core_port} 和 ${agent_port}..."
+        if ufw allow ${core_port}/tcp 2>/dev/null; then
+            ufw allow ${agent_port}/tcp 2>/dev/null || true
+            FIREWALL_AUTO_CONFIGURED=true
+            log_info "已自动放行端口 ${core_port} 和 ${agent_port}"
+        else
+            log_warn "自动放行失败，可能需要手动配置"
+        fi
+        
+    elif command -v iptables >/dev/null 2>&1; then
+        FIREWALL_TYPE="iptables"
+        log_info "检测到 iptables 防火墙"
+        
+        # 自动放行端口
+        log_info "正在自动放行端口 ${core_port} 和 ${agent_port}..."
+        if iptables -I INPUT -p tcp --dport ${core_port} -j ACCEPT 2>/dev/null; then
+            iptables -I INPUT -p tcp --dport ${agent_port} -j ACCEPT 2>/dev/null || true
+            FIREWALL_AUTO_CONFIGURED=true
+            log_info "已自动放行端口 ${core_port} 和 ${agent_port}"
+            # 尝试持久化规则
+            if command -v iptables-save >/dev/null 2>&1; then
+                mkdir -p /etc/iptables 2>/dev/null || true
+                iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+            fi
+        else
+            log_warn "自动放行失败，可能需要手动配置"
+        fi
+        
     else
-        log_warn "未检测到防火墙管理工具，请手动开放 ${core_port} 和 ${agent_port} 端口"
+        FIREWALL_TYPE="none"
+        log_info "未检测到防火墙管理工具"
     fi
 }
 
@@ -1099,7 +1143,57 @@ print_install_success() {
     echo ""
     echo -e "${GREEN}查看日志:${NC}"
     echo "  sudo journalctl -u gpanel -u gpanel-agent -f"
-    echo ""
+    
+    # 防火墙端口提示
+    if [ -n "$FIREWALL_TYPE" ] && [ "$FIREWALL_TYPE" != "none" ]; then
+        echo ""
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${YELLOW}防火墙提示${NC}"
+        echo -e "${YELLOW}========================================${NC}"
+        echo ""
+        
+        local core_port="${FIREWALL_CORE_PORT:-8080}"
+        local agent_port="${FIREWALL_AGENT_PORT:-9998}"
+        
+        if [ "$FIREWALL_AUTO_CONFIGURED" = true ]; then
+            echo -e "${GREEN}已自动在 ${FIREWALL_TYPE} 防火墙放行以下端口:${NC}"
+            echo ""
+            echo -e "  ${GREEN}●${NC} ${core_port} (Core Web 服务)"
+            echo -e "  ${GREEN}●${NC} ${agent_port} (Agent 服务)"
+            echo ""
+            if [ "$FIREWALL_TYPE" = "iptables" ]; then
+                echo -e "${YELLOW}注意: iptables 规则已保存到 /etc/iptables/rules.v4${NC}"
+            fi
+        else
+            echo -e "${YELLOW}检测到系统已安装 ${FIREWALL_TYPE} 防火墙，请手动放行以下端口:${NC}"
+            echo ""
+            
+            case "$FIREWALL_TYPE" in
+                firewalld)
+                    echo -e "  ${CYAN}firewalld 放行命令:${NC}"
+                    echo "    sudo firewall-cmd --permanent --add-port=${core_port}/tcp"
+                    echo "    sudo firewall-cmd --permanent --add-port=${agent_port}/tcp"
+                    echo "    sudo firewall-cmd --reload"
+                    ;;
+                ufw)
+                    echo -e "  ${CYAN}ufw 放行命令:${NC}"
+                    echo "    sudo ufw allow ${core_port}/tcp"
+                    echo "    sudo ufw allow ${agent_port}/tcp"
+                    ;;
+                iptables)
+                    echo -e "  ${CYAN}iptables 放行命令:${NC}"
+                    echo "    sudo iptables -I INPUT -p tcp --dport ${core_port} -j ACCEPT"
+                    echo "    sudo iptables -I INPUT -p tcp --dport ${agent_port} -j ACCEPT"
+                    echo "    sudo iptables-save > /etc/iptables/rules.v4  # 持久化规则"
+                    ;;
+            esac
+            echo ""
+            echo -e "${YELLOW}需要放行的端口:${NC}"
+            echo "  - ${core_port} (Core Web 服务)"
+            echo "  - ${agent_port} (Agent 服务)"
+        fi
+        echo ""
+    fi
 }
 
 # ============================================================
@@ -1353,13 +1447,63 @@ print_install_pre_success() {
     echo -e "  ${RED}●${NC} 建议安装正式版: 'sudo ./gpanel.sh install'"
     echo ""
     echo -e "${GREEN}服务管理:${NC}"
-    echo "  sudo ./gpanel.sh update        # 更新到正式版本"
+    echo "  sudo ./gpanel.sh update        # 更��到正式版本"
     echo "  sudo ./gpanel.sh install-pre   # 更新到最新预发布版本"
     echo "  sudo ./gpanel.sh uninstall     # 卸载"
     echo ""
     echo -e "${GREEN}查看日志:${NC}"
     echo "  sudo journalctl -u gpanel -u gpanel-agent -f"
-    echo ""
+    
+    # 防火墙端口提示
+    if [ -n "$FIREWALL_TYPE" ] && [ "$FIREWALL_TYPE" != "none" ]; then
+        echo ""
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${YELLOW}防火墙提示${NC}"
+        echo -e "${YELLOW}========================================${NC}"
+        echo ""
+        
+        local core_port="${FIREWALL_CORE_PORT:-8080}"
+        local agent_port="${FIREWALL_AGENT_PORT:-9998}"
+        
+        if [ "$FIREWALL_AUTO_CONFIGURED" = true ]; then
+            echo -e "${GREEN}已自动在 ${FIREWALL_TYPE} 防火墙放行以下端口:${NC}"
+            echo ""
+            echo -e "  ${GREEN}●${NC} ${core_port} (Core Web 服务)"
+            echo -e "  ${GREEN}●${NC} ${agent_port} (Agent 服务)"
+            echo ""
+            if [ "$FIREWALL_TYPE" = "iptables" ]; then
+                echo -e "${YELLOW}注意: iptables 规则已保存到 /etc/iptables/rules.v4${NC}"
+            fi
+        else
+            echo -e "${YELLOW}检测到系统已安装 ${FIREWALL_TYPE} 防火墙，请手动放行以下端口:${NC}"
+            echo ""
+            
+            case "$FIREWALL_TYPE" in
+                firewalld)
+                    echo -e "  ${CYAN}firewalld 放行命令:${NC}"
+                    echo "    sudo firewall-cmd --permanent --add-port=${core_port}/tcp"
+                    echo "    sudo firewall-cmd --permanent --add-port=${agent_port}/tcp"
+                    echo "    sudo firewall-cmd --reload"
+                    ;;
+                ufw)
+                    echo -e "  ${CYAN}ufw 放行命令:${NC}"
+                    echo "    sudo ufw allow ${core_port}/tcp"
+                    echo "    sudo ufw allow ${agent_port}/tcp"
+                    ;;
+                iptables)
+                    echo -e "  ${CYAN}iptables 放行命令:${NC}"
+                    echo "    sudo iptables -I INPUT -p tcp --dport ${core_port} -j ACCEPT"
+                    echo "    sudo iptables -I INPUT -p tcp --dport ${agent_port} -j ACCEPT"
+                    echo "    sudo iptables-save > /etc/iptables/rules.v4  # 持久化规则"
+                    ;;
+            esac
+            echo ""
+            echo -e "${YELLOW}需要放行的端口:${NC}"
+            echo "  - ${core_port} (Core Web 服务)"
+            echo "  - ${agent_port} (Agent 服务)"
+        fi
+        echo ""
+    fi
 }
 
 do_install() {
