@@ -97,3 +97,16 @@ type ForwardRule struct {
 	TargetIP   string `json:"targetIP"`                        // 目标IP
 	TargetPort string `json:"targetPort" validate:"required"` // 目标端口
 }
+
+// InstallRequest 防火墙安装请求
+type InstallRequest struct {
+	Type string `json:"type" validate:"required,oneof=ufw iptables firewalld"` // 防火墙类型
+}
+
+// InstallProgress 安装进度消息
+type InstallProgress struct {
+	Type     string `json:"type"`     // 消息类型: progress, log, error, complete
+	Progress int    `json:"progress"` // 进度百分比 (0-100)
+	Message  string `json:"message"`  // 进度消息
+	Log      string `json:"log"`      // 日志内容
+}

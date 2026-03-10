@@ -14,25 +14,42 @@
     </el-alert>
 
     <!-- 未安装防火墙提示 -->
-    <el-alert
-      v-else-if="!baseInfo.isExist"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 20px"
-    >
-      <template #title>
-        <span>系统未检测到防火墙管理工具</span>
+    <el-card v-else-if="!baseInfo.isExist" class="install-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>
+            <el-icon style="color: #f56c6c; margin-right: 8px"><WarningFilled /></el-icon>
+            系统未检测到防火墙管理工具
+          </span>
+          <el-button 
+            v-if="!showInstall" 
+            type="primary" 
+            size="small"
+            @click="showInstall = true"
+          >
+            一键安装
+          </el-button>
+        </div>
       </template>
-      <div style="margin-top: 8px">
-        请安装防火墙管理工具后再使用此功能。推荐安装：
-        <ul style="margin: 8px 0; padding-left: 20px">
-          <li><strong>ufw</strong> (Ubuntu/Debian): <code>apt install ufw</code></li>
-          <li><strong>firewalld</strong> (CentOS/RHEL): <code>yum install firewalld</code></li>
-          <li><strong>iptables</strong>: <code>apt install iptables</code> 或 <code>yum install iptables</code></li>
-        </ul>
-      </div>
-    </el-alert>
+      
+      <template v-if="!showInstall">
+        <div class="install-tips">
+          <p style="margin-bottom: 12px">请安装防火墙管理工具后再使用此功能。推荐安装：</p>
+          <ul style="margin: 0; padding-left: 20px">
+            <li><strong>ufw</strong> (Ubuntu/Debian): <code>apt install ufw</code></li>
+            <li><strong>firewalld</strong> (CentOS/RHEL): <code>yum install firewalld</code></li>
+            <li><strong>iptables</strong>: <code>apt install iptables</code> 或 <code>yum install iptables</code></li>
+          </ul>
+        </div>
+      </template>
+      
+      <template v-else>
+        <FirewallInstall 
+          @installed="handleInstalled"
+          @cancel="showInstall = false"
+        />
+      </template>
+    </el-card>
 
     <template v-else>
       <!-- 基础信息卡片 -->
@@ -106,15 +123,18 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { WarningFilled } from '@element-plus/icons-vue';
 import { loadBaseInfo as loadBaseInfoApi, operateFirewall } from '@/api/modules/firewall';
 import type { FirewallBaseInfo } from '@/api/interface/firewall';
 import PortRules from '@/components/firewall/PortRules.vue';
 import IPRules from '@/components/firewall/IPRules.vue';
 import ForwardRules from '@/components/firewall/ForwardRules.vue';
+import FirewallInstall from '@/components/firewall/FirewallInstall.vue';
 
 const isWindows = ref(false);
 const activeTab = ref('port');
 const loading = ref(false);
+const showInstall = ref(false);
 const baseInfo = ref<FirewallBaseInfo>({
   name: '-',
   isExist: false,
@@ -196,6 +216,12 @@ const loadRules = () => {
   // 子组件调用刷新
 };
 
+// 处理安装完成
+const handleInstalled = async () => {
+  showInstall.value = false;
+  await loadBaseInfo();
+};
+
 // 检测操作系统
 const checkOS = async () => {
   try {
@@ -265,5 +291,31 @@ onMounted(async () => {
 .rule-tabs :deep(.el-tab-pane) {
   height: 100%;
   overflow: hidden;
+}
+
+.install-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+}
+
+.install-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.install-tips {
+  color: #606266;
+  line-height: 1.8;
+}
+
+.install-tips code {
+  background: #f5f7fa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  color: #303133;
 }
 </style>

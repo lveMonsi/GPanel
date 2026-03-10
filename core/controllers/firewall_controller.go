@@ -1,11 +1,33 @@
 package controllers
 
 import (
+	"gpanel/global"
 	"gpanel/utils"
+	"log"
 	"net/http"
+	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
+
+// WebSocket 升级器
+var firewallUpGrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 4096,
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		host := r.Host
+		if origin == "" {
+			return true
+		}
+		if strings.Contains(origin, host) {
+			return true
+		}
+		return false
+	},
+}
 
 // FirewallController 防火墙控制器（代理到Agent）
 type FirewallController struct {
@@ -134,4 +156,95 @@ func (c *FirewallController) OperateForwardRule(ctx *gin.Context) {
 		return
 	}
 	ctx.Data(http.StatusOK, "application/json", resp)
+}
+
+// getAgentWSBaseURL 获取 Agent WebSocket 基础 URL
+func (c *FirewallController) getAgentWSBaseURL() string {
+	agentAddr := "localhost:9998"
+	if global.ConfigCacheInstance != nil {
+		agentAddr = global.ConfigCacheInstance.GetAgentAddress()
+	}
+	return "ws://" + agentAddr
+}
+
+// InstallFirewall 安装防火墙 WebSocket 代理
+// GET /api/v1/agent/firewall/install?type=ufw
+func (c *FirewallController) InstallFirewall(ctx *gin.Context) {
+	c.proxyWebSocket(ctx, c.getAgentWSBaseURL()+"/api/v1/firewall/install")
+}
+
+// proxyWebSocket WebSocket 代理
+func (c *FirewallController) proxyWebSocket(ctx *gin.Context, targetURL string) {
+	// 升级到 WebSocket 连接
+	clientConn, err := firewallUpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		log.Printf("[ERROR] failed to upgrade websocket: %v", err)
+		return
+	}
+	defer clientConn.Close()
+
+	// 构建目标 URL
+	query := ctx.Request.URL.Query()
+	targetURLWithQuery := targetURL + "?" + query.Encode()
+
+	// 连接到 Agent 服务
+	agentConn, _, err := websocket.DefaultDialer.Dial(targetURLWithQuery, nil)
+	if err != nil {
+		log.Printf("[ERROR] failed to connect to agent: %v", err)
+		clientConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"Failed to connect to agent service"}`))
+		return
+	}
+	defer agentConn.Close()
+
+	// 使用 done channel 来通知主 goroutine 退出
+	done := make(chan struct{})
+	var closeOnce sync.Once
+
+	// 关闭 done channel 的安全函数
+	closeDone := func() {
+		closeOnce.Do(func() {
+			close(done)
+		})
+	}
+
+	// 客户端 -> Agent
+	go func() {
+		defer closeDone()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				messageType, message, err := clientConn.ReadMessage()
+				if err != nil {
+					return
+				}
+				if err := agentConn.WriteMessage(messageType, message); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	// Agent -> 客户端
+	go func() {
+		defer closeDone()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				messageType, message, err := agentConn.ReadMessage()
+				if err != nil {
+					return
+				}
+				if err := clientConn.WriteMessage(messageType, message); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	// 等待任一方向关闭
+	<-done
 }

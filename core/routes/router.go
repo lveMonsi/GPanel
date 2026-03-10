@@ -167,6 +167,7 @@ func SetupRouter(r *gin.Engine) {
 				agent.POST("/firewall/update/port", middleware.Auth(), firewallController.UpdatePortRule)
 				agent.POST("/firewall/update/ip", middleware.Auth(), firewallController.UpdateIPRule)
 				agent.POST("/firewall/forward", middleware.Auth(), firewallController.OperateForwardRule)
+				agent.GET("/firewall/install", middleware.Auth(), firewallController.InstallFirewall)
 			}
 
 			// 主机管理 API

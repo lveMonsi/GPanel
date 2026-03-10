@@ -31,3 +31,14 @@ func ExecWithSudo(args ...string) (string, error) {
 	}
 	return output, nil
 }
+
+// RunCommandWithOutput 执行命令并返回输出
+func RunCommandWithOutput(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	result := strings.TrimSpace(string(output))
+	if err != nil {
+		return result, fmt.Errorf("command '%s %v' failed: %w", name, args, err)
+	}
+	return result, nil
+}

@@ -334,3 +334,206 @@ func (s *FirewallService) OperateForwardRule(req dto.ForwardRuleOperate) error {
 func contains(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
+
+// InstallFirewall 安装防火墙
+func (s *FirewallService) InstallFirewall(firewallType string, progressChan chan<- dto.InstallProgress) {
+	defer close(progressChan)
+
+	sendProgress := func(progressType string, progress int, message, logContent string) {
+		progressChan <- dto.InstallProgress{
+			Type:     progressType,
+			Progress: progress,
+			Message:  message,
+			Log:      logContent,
+		}
+	}
+
+	sendLog := func(logContent string) {
+		sendProgress("log", 0, "", logContent)
+	}
+
+	// 检测系统包管理器
+	var pkgManager string
+	var installCmd []string
+	var checkCmd string
+	var serviceName string
+
+	switch firewallType {
+	case "ufw":
+		sendProgress("progress", 5, "准备安装 UFW 防火墙...", "")
+		sendLog("[INFO] UFW (Uncomplicated Firewall) 是 Ubuntu/Debian 的默认防火墙工具")
+		pkgManager = detectPackageManager(sendLog)
+		if pkgManager == "" {
+			sendProgress("error", 0, "不支持的系统，无法自动安装", "")
+			return
+		}
+		switch pkgManager {
+		case "apt":
+			installCmd = []string{"apt", "install", "-y", "ufw"}
+		case "yum":
+			installCmd = []string{"yum", "install", "-y", "ufw"}
+		case "dnf":
+			installCmd = []string{"dnf", "install", "-y", "ufw"}
+		default:
+			sendProgress("error", 0, "无法确定包管理器", "")
+			return
+		}
+		checkCmd = "ufw"
+		serviceName = "ufw"
+
+	case "iptables":
+		sendProgress("progress", 5, "准备安装 iptables 防火墙...", "")
+		sendLog("[INFO] iptables 是 Linux 内核级别的防火墙工具")
+		pkgManager = detectPackageManager(sendLog)
+		if pkgManager == "" {
+			sendProgress("error", 0, "不支持的系统，无法自动安装", "")
+			return
+		}
+		switch pkgManager {
+		case "apt":
+			installCmd = []string{"apt", "install", "-y", "iptables", "iptables-persistent"}
+		case "yum":
+			installCmd = []string{"yum", "install", "-y", "iptables", "iptables-services"}
+		case "dnf":
+			installCmd = []string{"dnf", "install", "-y", "iptables", "iptables-services"}
+		default:
+			sendProgress("error", 0, "无法确定包管理器", "")
+			return
+		}
+		checkCmd = "iptables"
+		serviceName = "iptables"
+
+	case "firewalld":
+		sendProgress("progress", 5, "准备安装 firewalld 防火墙...", "")
+		sendLog("[INFO] firewalld 是 CentOS/RHEL 的默认防火墙工具")
+		pkgManager = detectPackageManager(sendLog)
+		if pkgManager == "" {
+			sendProgress("error", 0, "不支持的系统，无法自动安装", "")
+			return
+		}
+		switch pkgManager {
+		case "apt":
+			installCmd = []string{"apt", "install", "-y", "firewalld"}
+		case "yum":
+			installCmd = []string{"yum", "install", "-y", "firewalld"}
+		case "dnf":
+			installCmd = []string{"dnf", "install", "-y", "firewalld"}
+		default:
+			sendProgress("error", 0, "无法确定包管理器", "")
+			return
+		}
+		checkCmd = "firewall-cmd"
+		serviceName = "firewalld"
+
+	default:
+		sendProgress("error", 0, "不支持的防火墙类型: "+firewallType, "")
+		return
+	}
+
+	// 更新软件包列表 (apt 需要)
+	if pkgManager == "apt" {
+		sendProgress("progress", 10, "更新软件包列表...", "")
+		sendLog("[CMD] apt update")
+		output, err := runCommandWithLog("apt", "update", sendLog)
+		if err != nil {
+			sendLog("[WARN] 软件包列表更新失败，继续尝试安装: " + err.Error())
+		} else {
+			sendLog(output)
+		}
+	}
+
+	// 执行安装
+	sendProgress("progress", 20, fmt.Sprintf("正在安装 %s...", firewallType), "")
+	sendLog(fmt.Sprintf("[CMD] %s", strings.Join(installCmd, " ")))
+	output, err := runCommandWithLog(installCmd[0], installCmd[1:]..., sendLog)
+	if err != nil {
+		sendLog("[ERROR] 安装失败: " + err.Error())
+		sendProgress("error", 0, "安装失败: "+err.Error(), "")
+		return
+	}
+	sendLog(output)
+	sendLog("[INFO] 安装命令执行完成")
+
+	// 验证安装
+	sendProgress("progress", 70, "验证安装...", "")
+	sendLog(fmt.Sprintf("[CMD] which %s", checkCmd))
+	_, err = runCommandWithLog("which", checkCmd, sendLog)
+	if err != nil {
+		sendLog("[ERROR] 验证失败: 未找到 " + checkCmd)
+		sendProgress("error", 0, "安装验证失败，请检查系统环境", "")
+		return
+	}
+	sendLog("[INFO] 验证成功: " + checkCmd + " 已安装")
+
+	// 启用服务
+	sendProgress("progress", 80, "配置防火墙服务...", "")
+	
+	// 根据不同防火墙类型进行初始化配置
+	switch firewallType {
+	case "ufw":
+		// UFW 默认禁用，需要手动启用
+		sendLog("[CMD] ufw default deny incoming")
+		runCommandWithLog("ufw", "default", "deny", "incoming", sendLog)
+		sendLog("[CMD] ufw default allow outgoing")
+		runCommandWithLog("ufw", "default", "allow", "outgoing", sendLog)
+		// 允许 SSH 连接，防止被锁在外面
+		sendLog("[CMD] ufw allow 22/tcp")
+		runCommandWithLog("ufw", "allow", "22/tcp", sendLog)
+		sendLog("[INFO] UFW 已配置默认规则，SSH 端口已开放")
+		
+	case "iptables":
+		// 启用 iptables 服务
+		sendLog("[CMD] systemctl enable iptables")
+		runCommandWithLog("systemctl", "enable", "iptables", sendLog)
+		sendLog("[CMD] systemctl start iptables")
+		runCommandWithLog("systemctl", "start", "iptables", sendLog)
+		
+	case "firewalld":
+		// 启用 firewalld 服务
+		sendLog("[CMD] systemctl enable firewalld")
+		runCommandWithLog("systemctl", "enable", "firewalld", sendLog)
+		sendLog("[CMD] systemctl start firewalld")
+		runCommandWithLog("systemctl", "start", "firewalld", sendLog)
+		// 开放 SSH
+		sendLog("[CMD] firewall-cmd --permanent --add-service=ssh")
+		runCommandWithLog("firewall-cmd", "--permanent", "--add-service=ssh", sendLog)
+		sendLog("[CMD] firewall-cmd --reload")
+		runCommandWithLog("firewall-cmd", "--reload", sendLog)
+	}
+
+	sendProgress("progress", 95, "检查服务状态...", "")
+	sendLog(fmt.Sprintf("[CMD] systemctl status %s", serviceName))
+	statusOutput, err := runCommandWithLog("systemctl", "is-active", serviceName, sendLog)
+	if err != nil {
+		sendLog("[WARN] 服务状态检查: " + statusOutput)
+	} else {
+		sendLog("[INFO] 服务状态: " + statusOutput)
+	}
+
+	sendProgress("complete", 100, fmt.Sprintf("%s 安装完成！", firewallType), "")
+}
+
+// detectPackageManager 检测系统包管理器
+func detectPackageManager(sendLog func(string)) string {
+	// 检测 apt (Debian/Ubuntu)
+	if _, err := runCommandWithLog("which", "apt", sendLog); err == nil {
+		sendLog("[INFO] 检测到包管理器: apt (Debian/Ubuntu)")
+		return "apt"
+	}
+	// 检测 dnf (Fedora/RHEL 8+)
+	if _, err := runCommandWithLog("which", "dnf", sendLog); err == nil {
+		sendLog("[INFO] 检测到包管理器: dnf (Fedora/RHEL 8+)")
+		return "dnf"
+	}
+	// 检测 yum (CentOS/RHEL 7)
+	if _, err := runCommandWithLog("which", "yum", sendLog); err == nil {
+		sendLog("[INFO] 检测到包管理器: yum (CentOS/RHEL)")
+		return "yum"
+	}
+	return ""
+}
+
+// runCommandWithLog 执行命令并发送日志
+func runCommandWithLog(name string, args ...string) (string, error) {
+	return firewall.RunCommandWithOutput(name, args...)
+}

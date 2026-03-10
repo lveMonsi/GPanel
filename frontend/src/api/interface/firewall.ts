@@ -98,3 +98,16 @@ export interface ApiResponse<T = any> {
   message?: string;
   data?: T;
 }
+
+// 防火墙安装进度消息
+export interface InstallProgress {
+  type: 'progress' | 'log' | 'error' | 'complete';  // 消息类型
+  progress?: number;   // 进度百分比 (0-100)
+  message?: string;    // 进度消息
+  log?: string;        // 日志内容
+}
+
+// 防火墙安装请求
+export interface InstallRequest {
+  type: 'ufw' | 'iptables' | 'firewalld';  // 防火墙类型
+}
