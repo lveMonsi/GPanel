@@ -46,7 +46,8 @@ export const operateForwardRule = (params: ForwardRuleOperate) => {
 export const installFirewall = (type: 'ufw' | 'iptables' | 'firewalld'): WebSocket => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
-  const url = `${protocol}//${host}/api/v1/agent/firewall/install?type=${type}`;
+  const token = localStorage.getItem('token') || '';
+  const url = `${protocol}//${host}/api/v1/agent/firewall/install?type=${type}&token=${encodeURIComponent(token)}`;
   
   const ws = new WebSocket(url);
   return ws;

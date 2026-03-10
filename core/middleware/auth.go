@@ -16,26 +16,30 @@ var jwtSecret = []byte("gpanel-secret-key-change-in-production")
 
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenString string
+
+		// 首先尝试从 Authorization header 获取 token
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		if authHeader != "" {
+			// 检查 Bearer token 格式
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenString = parts[1]
+			}
+		}
+
+		// 如果 header 中没有，尝试从 URL 参数获取（用于 WebSocket）
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		}
+
+		if tokenString == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Authorization header required",
+				"error": "Authorization required",
 			})
 			c.Abort()
 			return
 		}
-
-		// 检查 Bearer token 格式
-		parts := strings.SplitN(authHeader, " ", 2)
-		if !(len(parts) == 2 && parts[0] == "Bearer") {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid authorization format",
-			})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 
 		// 验证 token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {

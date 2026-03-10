@@ -4,16 +4,19 @@ export function getLocalTerminalUrl(config: TerminalConfig): string {
   // 使用 Core 服务（同源），Core 服务会代理到 Agent
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.host;
-  return `${protocol}://${host}/api/v1/terminal/local?cols=${config.cols}&rows=${config.rows}`;
+  const token = localStorage.getItem('token') || '';
+  return `${protocol}://${host}/api/v1/terminal/local?cols=${config.cols}&rows=${config.rows}&token=${encodeURIComponent(token)}`;
 }
 
 export function getSSHTerminalUrl(config: TerminalConfig): string {
   // 使用 Core 服务（同源），Core 服务会代理到 Agent
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.host;
+  const token = localStorage.getItem('token') || '';
   const params = new URLSearchParams({
     cols: config.cols.toString(),
-    rows: config.rows.toString()
+    rows: config.rows.toString(),
+    token: token
   });
   return `${protocol}://${host}/api/v1/terminal/ssh?${params.toString()}`;
 }

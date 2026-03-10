@@ -151,8 +151,8 @@ func SetupRouter(r *gin.Engine) {
 			terminalController, _ := controllers.NewTerminalController()
 			terminal := v1.Group("/terminal")
 			{
-				terminal.GET("/local", terminalController.TerminalLocal)
-				terminal.GET("/ssh", terminalController.TerminalSSH)
+				terminal.GET("/local", middleware.Auth(), terminalController.TerminalLocal)
+				terminal.GET("/ssh", middleware.Auth(), terminalController.TerminalSSH)
 			}
 
 			// 防火墙 API（代理到 Agent）

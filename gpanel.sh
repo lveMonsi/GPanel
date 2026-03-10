@@ -1638,7 +1638,7 @@ do_install() {
                         exit 1
                     fi
                     
-                    select_version "请选择要安装���版本:" "${versions[@]}"
+                    select_version "请选择要安装的版本:" "${versions[@]}"
                     if [ $? -ne 0 ]; then
                         log_info "安装已取消"
                         exit 0
