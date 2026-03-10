@@ -434,30 +434,27 @@ func (s *FirewallService) InstallFirewall(firewallType string, progressChan chan
 	if pkgManager == "apt" {
 		sendProgress("progress", 10, "更新软件包列表...", "")
 		sendLog("[CMD] apt update")
-		output, err := runCommandWithLog("apt", "update", sendLog)
+		_, err := runCommandWithLog("apt", []string{"update"}, sendLog)
 		if err != nil {
 			sendLog("[WARN] 软件包列表更新失败，继续尝试安装: " + err.Error())
-		} else {
-			sendLog(output)
 		}
 	}
 
 	// 执行安装
 	sendProgress("progress", 20, fmt.Sprintf("正在安装 %s...", firewallType), "")
 	sendLog(fmt.Sprintf("[CMD] %s", strings.Join(installCmd, " ")))
-	output, err := runCommandWithLog(installCmd[0], installCmd[1:]..., sendLog)
+	_, err := runCommandWithLog(installCmd[0], installCmd[1:], sendLog)
 	if err != nil {
 		sendLog("[ERROR] 安装失败: " + err.Error())
 		sendProgress("error", 0, "安装失败: "+err.Error(), "")
 		return
 	}
-	sendLog(output)
 	sendLog("[INFO] 安装命令执行完成")
 
 	// 验证安装
 	sendProgress("progress", 70, "验证安装...", "")
 	sendLog(fmt.Sprintf("[CMD] which %s", checkCmd))
-	_, err = runCommandWithLog("which", checkCmd, sendLog)
+	_, err = runCommandWithLog("which", []string{checkCmd}, sendLog)
 	if err != nil {
 		sendLog("[ERROR] 验证失败: 未找到 " + checkCmd)
 		sendProgress("error", 0, "安装验证失败，请检查系统环境", "")
@@ -473,42 +470,38 @@ func (s *FirewallService) InstallFirewall(firewallType string, progressChan chan
 	case "ufw":
 		// UFW 默认禁用，需要手动启用
 		sendLog("[CMD] ufw default deny incoming")
-		runCommandWithLog("ufw", "default", "deny", "incoming", sendLog)
+		runCommandWithLog("ufw", []string{"default", "deny", "incoming"}, sendLog)
 		sendLog("[CMD] ufw default allow outgoing")
-		runCommandWithLog("ufw", "default", "allow", "outgoing", sendLog)
+		runCommandWithLog("ufw", []string{"default", "allow", "outgoing"}, sendLog)
 		// 允许 SSH 连接，防止被锁在外面
 		sendLog("[CMD] ufw allow 22/tcp")
-		runCommandWithLog("ufw", "allow", "22/tcp", sendLog)
+		runCommandWithLog("ufw", []string{"allow", "22/tcp"}, sendLog)
 		sendLog("[INFO] UFW 已配置默认规则，SSH 端口已开放")
 		
 	case "iptables":
 		// 启用 iptables 服务
 		sendLog("[CMD] systemctl enable iptables")
-		runCommandWithLog("systemctl", "enable", "iptables", sendLog)
+		runCommandWithLog("systemctl", []string{"enable", "iptables"}, sendLog)
 		sendLog("[CMD] systemctl start iptables")
-		runCommandWithLog("systemctl", "start", "iptables", sendLog)
+		runCommandWithLog("systemctl", []string{"start", "iptables"}, sendLog)
 		
 	case "firewalld":
 		// 启用 firewalld 服务
 		sendLog("[CMD] systemctl enable firewalld")
-		runCommandWithLog("systemctl", "enable", "firewalld", sendLog)
+		runCommandWithLog("systemctl", []string{"enable", "firewalld"}, sendLog)
 		sendLog("[CMD] systemctl start firewalld")
-		runCommandWithLog("systemctl", "start", "firewalld", sendLog)
+		runCommandWithLog("systemctl", []string{"start", "firewalld"}, sendLog)
 		// 开放 SSH
 		sendLog("[CMD] firewall-cmd --permanent --add-service=ssh")
-		runCommandWithLog("firewall-cmd", "--permanent", "--add-service=ssh", sendLog)
+		runCommandWithLog("firewall-cmd", []string{"--permanent", "--add-service=ssh"}, sendLog)
 		sendLog("[CMD] firewall-cmd --reload")
-		runCommandWithLog("firewall-cmd", "--reload", sendLog)
+		runCommandWithLog("firewall-cmd", []string{"--reload"}, sendLog)
 	}
 
 	sendProgress("progress", 95, "检查服务状态...", "")
-	sendLog(fmt.Sprintf("[CMD] systemctl status %s", serviceName))
-	statusOutput, err := runCommandWithLog("systemctl", "is-active", serviceName, sendLog)
-	if err != nil {
-		sendLog("[WARN] 服务状态检查: " + statusOutput)
-	} else {
-		sendLog("[INFO] 服务状态: " + statusOutput)
-	}
+	sendLog(fmt.Sprintf("[CMD] systemctl is-active %s", serviceName))
+	statusOutput, _ := runCommandWithLog("systemctl", []string{"is-active", serviceName}, sendLog)
+	sendLog("[INFO] 服务状态: " + statusOutput)
 
 	sendProgress("complete", 100, fmt.Sprintf("%s 安装完成！", firewallType), "")
 }
@@ -516,17 +509,17 @@ func (s *FirewallService) InstallFirewall(firewallType string, progressChan chan
 // detectPackageManager 检测系统包管理器
 func detectPackageManager(sendLog func(string)) string {
 	// 检测 apt (Debian/Ubuntu)
-	if _, err := runCommandWithLog("which", "apt", sendLog); err == nil {
+	if _, err := runCommandWithLog("which", []string{"apt"}, sendLog); err == nil {
 		sendLog("[INFO] 检测到包管理器: apt (Debian/Ubuntu)")
 		return "apt"
 	}
 	// 检测 dnf (Fedora/RHEL 8+)
-	if _, err := runCommandWithLog("which", "dnf", sendLog); err == nil {
+	if _, err := runCommandWithLog("which", []string{"dnf"}, sendLog); err == nil {
 		sendLog("[INFO] 检测到包管理器: dnf (Fedora/RHEL 8+)")
 		return "dnf"
 	}
 	// 检测 yum (CentOS/RHEL 7)
-	if _, err := runCommandWithLog("which", "yum", sendLog); err == nil {
+	if _, err := runCommandWithLog("which", []string{"yum"}, sendLog); err == nil {
 		sendLog("[INFO] 检测到包管理器: yum (CentOS/RHEL)")
 		return "yum"
 	}
@@ -534,6 +527,16 @@ func detectPackageManager(sendLog func(string)) string {
 }
 
 // runCommandWithLog 执行命令并发送日志
-func runCommandWithLog(name string, args ...string) (string, error) {
-	return firewall.RunCommandWithOutput(name, args...)
+func runCommandWithLog(name string, args []string, sendLog func(string)) (string, error) {
+	output, err := firewall.RunCommandWithOutput(name, args...)
+	if sendLog != nil && output != "" {
+		// 将多行输出拆分为单独的日志行
+		lines := strings.Split(output, "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				sendLog(line)
+			}
+		}
+	}
+	return output, err
 }
