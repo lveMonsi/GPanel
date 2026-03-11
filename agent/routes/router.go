@@ -35,6 +35,7 @@ func SetupRouter(r *gin.Engine) {
 				firewall.POST("/update/ip", firewallController.UpdateIPRule)
 				firewall.POST("/forward", firewallController.OperateForwardRule)
 				firewall.GET("/install", firewallController.InstallFirewall)
+				firewall.GET("/uninstall", firewallController.UninstallFirewall)
 			}
 
 			// 终端路由

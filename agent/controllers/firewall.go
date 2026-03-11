@@ -201,3 +201,45 @@ func (c *FirewallController) InstallFirewall(ctx *gin.Context) {
 		}
 	}
 }
+
+// UninstallFirewall 卸载防火墙 (WebSocket)
+// GET /api/v1/firewall/uninstall?type=ufw&keepRules=false&keepPolicies=false
+func (c *FirewallController) UninstallFirewall(ctx *gin.Context) {
+	// 升级为 WebSocket 连接
+	wsConn, err := firewallUpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		log.Printf("failed to upgrade websocket: %v", err)
+		return
+	}
+	defer wsConn.Close()
+
+	// 获取参数
+	firewallType := ctx.DefaultQuery("type", "ufw")
+	keepRules := ctx.DefaultQuery("keepRules", "false") == "true"
+	keepPolicies := ctx.DefaultQuery("keepPolicies", "false") == "true"
+
+	// 创建进度回调函数
+	progressChan := make(chan dto.UninstallProgress, 100)
+
+	// 启动卸载服务
+	go c.firewallService.UninstallFirewall(firewallType, keepRules, keepPolicies, progressChan)
+
+	// 发送进度消息到客户端
+	for progress := range progressChan {
+		data, err := json.Marshal(progress)
+		if err != nil {
+			log.Printf("failed to marshal progress: %v", err)
+			continue
+		}
+
+		if err := wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
+			log.Printf("failed to write message: %v", err)
+			break
+		}
+
+		// 如果卸载完成或出错，关闭连接
+		if progress.Type == "complete" || progress.Type == "error" {
+			break
+		}
+	}
+}

@@ -111,3 +111,18 @@ export interface InstallProgress {
 export interface InstallRequest {
   type: 'ufw' | 'iptables' | 'firewalld';  // 防火墙类型
 }
+
+// 防火墙卸载进度消息
+export interface UninstallProgress {
+  type: 'progress' | 'log' | 'error' | 'complete';  // 消息类型
+  progress?: number;   // 进度百分比 (0-100)
+  message?: string;    // 进度消息
+  log?: string;        // 日志内容
+}
+
+// 防火墙卸载请求
+export interface UninstallRequest {
+  type: 'ufw' | 'iptables' | 'firewalld';  // 防火墙类型
+  keepRules?: boolean;    // 是否保留规则数据
+  keepPolicies?: boolean; // 是否保留策略配置
+}

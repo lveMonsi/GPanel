@@ -58,6 +58,24 @@
     </el-card>
 
     <template v-else>
+      <!-- 卸载组件 -->
+      <el-card v-if="showUninstall" class="uninstall-card" shadow="hover" style="margin-bottom: 20px">
+        <template #header>
+          <div class="card-header">
+            <span>
+              <el-icon style="color: #f56c6c; margin-right: 8px"><WarningFilled /></el-icon>
+              卸载防火墙
+            </span>
+          </div>
+        </template>
+        <FirewallUninstall
+          :firewall-name="baseInfo.name"
+          :firewall-type="getFirewallType()"
+          @uninstalled="handleUninstalled"
+          @cancel="showUninstall = false"
+        />
+      </el-card>
+
       <!-- 基础信息卡片 -->
       <el-card class="info-card" shadow="hover">
         <template #header>
@@ -88,6 +106,13 @@
                   @click="handleOperate('restart')"
                 >
                   重启
+                </el-button>
+                <el-button
+                  type="danger"
+                  :disabled="!baseInfo.isExist"
+                  @click="showUninstall = true"
+                >
+                  卸载
                 </el-button>
               </el-button-group>
             </div>
@@ -137,12 +162,14 @@ import PortRules from '@/components/firewall/PortRules.vue';
 import IPRules from '@/components/firewall/IPRules.vue';
 import ForwardRules from '@/components/firewall/ForwardRules.vue';
 import FirewallInstall from '@/components/firewall/FirewallInstall.vue';
+import FirewallUninstall from '@/components/firewall/FirewallUninstall.vue';
 
 const isWindows = ref(false);
 const activeTab = ref('port');
 const loading = ref(false);
 const initialLoading = ref(true);
 const showInstall = ref(false);
+const showUninstall = ref(false);
 const baseInfo = ref<FirewallBaseInfo>({
   name: '-',
   isExist: false,
@@ -231,6 +258,20 @@ const handleInstalled = async () => {
   await loadBaseInfo();
 };
 
+// 处理卸载完成
+const handleUninstalled = async () => {
+  showUninstall.value = false;
+  await loadBaseInfo();
+};
+
+// 获取防火墙类型
+const getFirewallType = (): 'ufw' | 'iptables' | 'firewalld' => {
+  const name = baseInfo.value.name.toLowerCase();
+  if (name === 'ufw') return 'ufw';
+  if (name === 'firewalld') return 'firewalld';
+  return 'iptables';
+};
+
 // 检测操作系统
 const checkOS = async () => {
   try {
@@ -315,6 +356,12 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.uninstall-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+  border: 1px solid #f56c6c;
 }
 
 .install-tips {

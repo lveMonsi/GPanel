@@ -540,3 +540,224 @@ func runCommandWithLog(name string, args []string, sendLog func(string)) (string
 	}
 	return output, err
 }
+
+// UninstallFirewall 卸载防火墙
+func (s *FirewallService) UninstallFirewall(firewallType string, keepRules bool, keepPolicies bool, progressChan chan<- dto.UninstallProgress) {
+	defer close(progressChan)
+
+	sendProgress := func(progressType string, progress int, message, logContent string) {
+		progressChan <- dto.UninstallProgress{
+			Type:     progressType,
+			Progress: progress,
+			Message:  message,
+			Log:      logContent,
+		}
+	}
+
+	sendLog := func(logContent string) {
+		sendProgress("log", 0, "", logContent)
+	}
+
+	// 检测系统包管理器
+	pkgManager := detectPackageManager(sendLog)
+	if pkgManager == "" {
+		sendProgress("error", 0, "不支持的系统，无法自动卸载", "")
+		return
+	}
+
+	var serviceName string
+	var packages []string
+	var rulesBackupDir string
+
+	switch firewallType {
+	case "ufw":
+		sendProgress("progress", 5, "准备卸载 UFW 防火墙...", "")
+		sendLog("[INFO] 即将卸载 UFW 防火墙")
+		serviceName = "ufw"
+		packages = []string{"ufw"}
+
+	case "iptables":
+		sendProgress("progress", 5, "准备卸载 iptables 防火墙...", "")
+		sendLog("[INFO] 即将卸载 iptables 防火墙")
+		serviceName = "iptables"
+		if pkgManager == "apt" {
+			packages = []string{"iptables", "iptables-persistent"}
+		} else {
+			packages = []string{"iptables", "iptables-services"}
+		}
+
+	case "firewalld":
+		sendProgress("progress", 5, "准备卸载 firewalld 防火墙...", "")
+		sendLog("[INFO] 即将卸载 firewalld 防火墙")
+		serviceName = "firewalld"
+		packages = []string{"firewalld"}
+
+	default:
+		sendProgress("error", 0, "不支持的防火墙类型: "+firewallType, "")
+		return
+	}
+
+	// 备份规则（如果需要保留）
+	if keepRules {
+		sendProgress("progress", 10, "备份防火墙规则...", "")
+		rulesBackupDir = "/etc/gpanel/firewall-backup"
+		sendLog(fmt.Sprintf("[CMD] mkdir -p %s", rulesBackupDir))
+		runCommandWithLog("mkdir", []string{"-p", rulesBackupDir}, sendLog)
+
+		switch firewallType {
+		case "ufw":
+			// 备份 UFW 规则
+			sendLog("[CMD] cp -r /etc/ufw " + rulesBackupDir + "/ufw")
+			runCommandWithLog("cp", []string{"-r", "/etc/ufw", rulesBackupDir + "/ufw"}, sendLog)
+			sendLog("[CMD] cp /lib/ufw/user.rules " + rulesBackupDir + "/user.rules")
+			runCommandWithLog("cp", []string{"/lib/ufw/user.rules", rulesBackupDir + "/user.rules"}, sendLog)
+			sendLog("[CMD] cp /lib/ufw/user6.rules " + rulesBackupDir + "/user6.rules")
+			runCommandWithLog("cp", []string{"/lib/ufw/user6.rules", rulesBackupDir + "/user6.rules"}, sendLog)
+			sendLog("[INFO] UFW 规则已备份到 " + rulesBackupDir)
+
+		case "iptables":
+			// 备份 iptables 规则
+			sendLog("[CMD] iptables-save > " + rulesBackupDir + "/iptables.rules")
+			runCommandWithLog("sh", []string{"-c", "iptables-save > " + rulesBackupDir + "/iptables.rules"}, sendLog)
+			sendLog("[CMD] ip6tables-save > " + rulesBackupDir + "/ip6tables.rules")
+			runCommandWithLog("sh", []string{"-c", "ip6tables-save > " + rulesBackupDir + "/ip6tables.rules"}, sendLog)
+			sendLog("[INFO] iptables 规则已备份到 " + rulesBackupDir)
+
+		case "firewalld":
+			// 备份 firewalld 配置
+			sendLog("[CMD] cp -r /etc/firewalld " + rulesBackupDir + "/firewalld")
+			runCommandWithLog("cp", []string{"-r", "/etc/firewalld", rulesBackupDir + "/firewalld"}, sendLog)
+			sendLog("[INFO] firewalld 配置已备份到 " + rulesBackupDir)
+		}
+	} else {
+		sendProgress("progress", 10, "跳过备份规则...", "")
+		sendLog("[INFO] 用户选择不保留规则数据，将清除所有规则")
+	}
+
+	// 停止服务
+	sendProgress("progress", 20, "停止防火墙服务...", "")
+	sendLog(fmt.Sprintf("[CMD] systemctl stop %s", serviceName))
+	_, err := runCommandWithLog("systemctl", []string{"stop", serviceName}, sendLog)
+	if err != nil {
+		sendLog("[WARN] 停止服务失败: " + err.Error())
+	}
+
+	// 禁用服务自启动
+	sendProgress("progress", 30, "禁用服务自启动...", "")
+	sendLog(fmt.Sprintf("[CMD] systemctl disable %s", serviceName))
+	_, err = runCommandWithLog("systemctl", []string{"disable", serviceName}, sendLog)
+	if err != nil {
+		sendLog("[WARN] 禁用服务失败: " + err.Error())
+	}
+
+	// 清除规则（如果不保留）
+	if !keepRules {
+		sendProgress("progress", 40, "清除防火墙规则...", "")
+		switch firewallType {
+		case "ufw":
+			// UFW 重置
+			sendLog("[CMD] ufw --force reset")
+			runCommandWithLog("ufw", []string{"--force", "reset"}, sendLog)
+			sendLog("[INFO] UFW 规则已清除")
+
+		case "iptables":
+			// 清除 iptables 规则
+			sendLog("[CMD] iptables -F")
+			runCommandWithLog("iptables", []string{"-F"}, sendLog)
+			sendLog("[CMD] iptables -X")
+			runCommandWithLog("iptables", []string{"-X"}, sendLog)
+			sendLog("[CMD] iptables -t nat -F")
+			runCommandWithLog("iptables", []string{"-t", "nat", "-F"}, sendLog)
+			sendLog("[CMD] iptables -t mangle -F")
+			runCommandWithLog("iptables", []string{"-t", "mangle", "-F"}, sendLog)
+			sendLog("[CMD] iptables -P INPUT ACCEPT")
+			runCommandWithLog("iptables", []string{"-P", "INPUT", "ACCEPT"}, sendLog)
+			sendLog("[CMD] iptables -P FORWARD ACCEPT")
+			runCommandWithLog("iptables", []string{"-P", "FORWARD", "ACCEPT"}, sendLog)
+			sendLog("[CMD] iptables -P OUTPUT ACCEPT")
+			runCommandWithLog("iptables", []string{"-P", "OUTPUT", "ACCEPT"}, sendLog)
+			sendLog("[INFO] iptables 规则已清除")
+
+		case "firewalld":
+			// firewalld 的规则会在卸载时自动删除
+			sendLog("[INFO] firewalld 规则将在卸载时自动清除")
+		}
+	}
+
+	// 卸载软件包
+	sendProgress("progress", 60, "卸载防火墙软件包...", "")
+	var removeCmd []string
+	var purgeFlag string
+
+	if pkgManager == "apt" {
+		// apt 使用 purge 彻底删除配置
+		if !keepPolicies {
+			purgeFlag = "--purge"
+		}
+		removeCmd = append([]string{"remove", "-y", purgeFlag}, packages...)
+	} else if pkgManager == "yum" {
+		removeCmd = append([]string{"remove", "-y"}, packages...)
+	} else if pkgManager == "dnf" {
+		removeCmd = append([]string{"remove", "-y"}, packages...)
+	}
+
+	sendLog(fmt.Sprintf("[CMD] %s %s", pkgManager, strings.Join(removeCmd, " ")))
+	_, err = runCommandWithLog(pkgManager, removeCmd, sendLog)
+	if err != nil {
+		sendLog("[ERROR] 卸载失败: " + err.Error())
+		sendProgress("error", 0, "卸载失败: "+err.Error(), "")
+		return
+	}
+	sendLog("[INFO] 软件包卸载完成")
+
+	// 清理残留配置文件（如果不保留策略）
+	if !keepPolicies {
+		sendProgress("progress", 80, "清理残留配置...", "")
+		switch firewallType {
+		case "ufw":
+			sendLog("[CMD] rm -rf /etc/ufw")
+			runCommandWithLog("rm", []string{"-rf", "/etc/ufw"}, sendLog)
+			sendLog("[CMD] rm -rf /lib/ufw")
+			runCommandWithLog("rm", []string{"-rf", "/lib/ufw"}, sendLog)
+			sendLog("[INFO] UFW 配置文件已清理")
+
+		case "iptables":
+			sendLog("[CMD] rm -rf /etc/iptables")
+			runCommandWithLog("rm", []string{"-rf", "/etc/iptables"}, sendLog)
+			sendLog("[INFO] iptables 配置文件已清理")
+
+		case "firewalld":
+			sendLog("[CMD] rm -rf /etc/firewalld")
+			runCommandWithLog("rm", []string{"-rf", "/etc/firewalld"}, sendLog)
+			sendLog("[INFO] firewalld 配置文件已清理")
+		}
+	}
+
+	// 验证卸载
+	sendProgress("progress", 90, "验证卸载结果...", "")
+	var checkCmd string
+	switch firewallType {
+	case "ufw":
+		checkCmd = "ufw"
+	case "iptables":
+		checkCmd = "iptables"
+	case "firewalld":
+		checkCmd = "firewall-cmd"
+	}
+
+	sendLog(fmt.Sprintf("[CMD] which %s", checkCmd))
+	output, err := runCommandWithLog("which", []string{checkCmd}, sendLog)
+	if err == nil && output != "" {
+		sendLog("[WARN] 检测到 " + checkCmd + " 命令仍然存在，可能卸载不完整")
+	} else {
+		sendLog("[INFO] 验证成功: " + checkCmd + " 已卸载")
+	}
+
+	// 提示备份位置
+	if keepRules {
+		sendLog("[INFO] 防火墙规则已备份到: " + rulesBackupDir)
+		sendLog("[INFO] 重新安装防火墙后可手动恢复规则")
+	}
+
+	sendProgress("complete", 100, fmt.Sprintf("%s 卸载完成！", firewallType), "")
+}

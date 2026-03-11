@@ -110,3 +110,18 @@ type InstallProgress struct {
 	Message  string `json:"message"`  // 进度消息
 	Log      string `json:"log"`      // 日志内容
 }
+
+// UninstallProgress 卸载进度消息
+type UninstallProgress struct {
+	Type     string `json:"type"`     // 消息类型: progress, log, error, complete
+	Progress int    `json:"progress"` // 进度百分比 (0-100)
+	Message  string `json:"message"`  // 进度消息
+	Log      string `json:"log"`      // 日志内容
+}
+
+// UninstallRequest 防火墙卸载请求
+type UninstallRequest struct {
+	Type          string `json:"type" validate:"required,oneof=ufw iptables firewalld"` // 防火墙类型
+	KeepRules     bool   `json:"keepRules"`                                            // 是否保留规则数据
+	KeepPolicies  bool   `json:"keepPolicies"`                                         // 是否保留策略配置
+}

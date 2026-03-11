@@ -53,6 +53,24 @@ export const installFirewall = (type: 'ufw' | 'iptables' | 'firewalld'): WebSock
   return ws;
 };
 
+// 卸载防火墙 (WebSocket)
+// 返回 WebSocket 连接，调用者负责处理消息
+export const uninstallFirewall = (params: {
+  type: 'ufw' | 'iptables' | 'firewalld';
+  keepRules?: boolean;
+  keepPolicies?: boolean;
+}): WebSocket => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host;
+  const token = localStorage.getItem('token') || '';
+  const keepRules = params.keepRules ? 'true' : 'false';
+  const keepPolicies = params.keepPolicies ? 'true' : 'false';
+  const url = `${protocol}//${host}/api/v1/agent/firewall/uninstall?type=${params.type}&keepRules=${keepRules}&keepPolicies=${keepPolicies}&token=${encodeURIComponent(token)}`;
+  
+  const ws = new WebSocket(url);
+  return ws;
+};
+
 // 防火墙 API 对象（可选）
 export const firewallApi = {
   loadBaseInfo,
@@ -63,7 +81,8 @@ export const firewallApi = {
   operateIPRule,
   updateIPRule,
   operateForwardRule,
-  installFirewall
+  installFirewall,
+  uninstallFirewall
 };
 
 export default firewallApi;
