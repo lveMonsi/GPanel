@@ -433,27 +433,49 @@ func (u *UfwClient) Port(rule dto.FireInfo, operation string) error {
 		action = "deny"
 	}
 
-	// 构建端口字符串
-	portSpec := rule.Port
+	// 确定协议
+	proto := ""
 	if rule.Protocol != "" && rule.Protocol != "tcp/udp" {
-		portSpec += "/" + rule.Protocol
+		proto = rule.Protocol
 	}
 
-	// 添加IP地址
-	if rule.Address != "" && rule.Address != "0.0.0.0/0" {
-		portSpec += " from " + rule.Address
-	}
-
+	var err error
 	if operation == "remove" {
-		_, err := ExecWithSudo("ufw", "delete", action, portSpec)
-		if err != nil {
-			return fmt.Errorf("ufw port operation failed: %w", err)
+		if rule.Address != "" && rule.Address != "0.0.0.0/0" {
+			// 删除带 IP 的规则: ufw delete allow from <IP> to any port <PORT> proto <PROTO>
+			if proto != "" {
+				_, err = ExecWithSudo("ufw", "delete", action, "from", rule.Address, "to", "any", "port", rule.Port, "proto", proto)
+			} else {
+				_, err = ExecWithSudo("ufw", "delete", action, "from", rule.Address, "to", "any", "port", rule.Port)
+			}
+		} else {
+			// 删除不带 IP 的规则: ufw delete allow <PORT>/<PROTO>
+			portSpec := rule.Port
+			if proto != "" {
+				portSpec += "/" + proto
+			}
+			_, err = ExecWithSudo("ufw", "delete", action, portSpec)
 		}
 	} else {
-		_, err := ExecWithSudo("ufw", action, portSpec)
-		if err != nil {
-			return fmt.Errorf("ufw port operation failed: %w", err)
+		if rule.Address != "" && rule.Address != "0.0.0.0/0" {
+			// 添加带 IP 的规则: ufw allow from <IP> to any port <PORT> proto <PROTO>
+			if proto != "" {
+				_, err = ExecWithSudo("ufw", action, "from", rule.Address, "to", "any", "port", rule.Port, "proto", proto)
+			} else {
+				_, err = ExecWithSudo("ufw", action, "from", rule.Address, "to", "any", "port", rule.Port)
+			}
+		} else {
+			// 添加不带 IP 的规则: ufw allow <PORT>/<PROTO>
+			portSpec := rule.Port
+			if proto != "" {
+				portSpec += "/" + proto
+			}
+			_, err = ExecWithSudo("ufw", action, portSpec)
 		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("ufw port operation failed: %w", err)
 	}
 
 	return nil
