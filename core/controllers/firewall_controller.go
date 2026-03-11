@@ -173,6 +173,12 @@ func (c *FirewallController) InstallFirewall(ctx *gin.Context) {
 	c.proxyWebSocket(ctx, c.getAgentWSBaseURL()+"/api/v1/firewall/install")
 }
 
+// UninstallFirewall 卸载防火墙 WebSocket 代理
+// GET /api/v1/agent/firewall/uninstall?type=ufw&keepRules=false&keepPolicies=false
+func (c *FirewallController) UninstallFirewall(ctx *gin.Context) {
+	c.proxyWebSocket(ctx, c.getAgentWSBaseURL()+"/api/v1/firewall/uninstall")
+}
+
 // proxyWebSocket WebSocket 代理
 func (c *FirewallController) proxyWebSocket(ctx *gin.Context, targetURL string) {
 	// 升级到 WebSocket 连接
