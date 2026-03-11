@@ -461,49 +461,41 @@ func (u *UfwClient) Port(rule dto.FireInfo, operation string) error {
 		action = "deny"
 	}
 
-	// 确定协议
-	proto := ""
-	if rule.Protocol != "" && rule.Protocol != "tcp/udp" {
-		proto = rule.Protocol
+	// 当协议为 tcp/udp 时，需要分别对 tcp 和 udp 执行操作
+	protocols := []string{rule.Protocol}
+	if rule.Protocol == "" || rule.Protocol == "tcp/udp" {
+		protocols = []string{"tcp", "udp"}
 	}
 
-	var err error
-	if operation == "remove" {
-		if rule.Address != "" && rule.Address != "0.0.0.0/0" {
-			// 删除带 IP 的规则: ufw delete allow from <IP> to any port <PORT> proto <PROTO>
-			if proto != "" {
+	var lastErr error
+	for _, proto := range protocols {
+		var err error
+		if operation == "remove" {
+			if rule.Address != "" && rule.Address != "0.0.0.0/0" {
+				// 删除带 IP 的规则: ufw delete allow from <IP> to any port <PORT> proto <PROTO>
 				_, err = ExecWithSudo("ufw", "delete", action, "from", rule.Address, "to", "any", "port", rule.Port, "proto", proto)
 			} else {
-				_, err = ExecWithSudo("ufw", "delete", action, "from", rule.Address, "to", "any", "port", rule.Port)
+				// 删除不带 IP 的规则: ufw delete allow <PORT>/<PROTO>
+				portSpec := rule.Port + "/" + proto
+				_, err = ExecWithSudo("ufw", "delete", action, portSpec)
 			}
 		} else {
-			// 删除不带 IP 的规则: ufw delete allow <PORT>/<PROTO>
-			portSpec := rule.Port
-			if proto != "" {
-				portSpec += "/" + proto
-			}
-			_, err = ExecWithSudo("ufw", "delete", action, portSpec)
-		}
-	} else {
-		if rule.Address != "" && rule.Address != "0.0.0.0/0" {
-			// 添加带 IP 的规则: ufw allow from <IP> to any port <PORT> proto <PROTO>
-			if proto != "" {
+			if rule.Address != "" && rule.Address != "0.0.0.0/0" {
+				// 添加带 IP 的规则: ufw allow from <IP> to any port <PORT> proto <PROTO>
 				_, err = ExecWithSudo("ufw", action, "from", rule.Address, "to", "any", "port", rule.Port, "proto", proto)
 			} else {
-				_, err = ExecWithSudo("ufw", action, "from", rule.Address, "to", "any", "port", rule.Port)
+				// 添加不带 IP 的规则: ufw allow <PORT>/<PROTO>
+				portSpec := rule.Port + "/" + proto
+				_, err = ExecWithSudo("ufw", action, portSpec)
 			}
-		} else {
-			// 添加不带 IP 的规则: ufw allow <PORT>/<PROTO>
-			portSpec := rule.Port
-			if proto != "" {
-				portSpec += "/" + proto
-			}
-			_, err = ExecWithSudo("ufw", action, portSpec)
+		}
+		if err != nil {
+			lastErr = err
 		}
 	}
 
-	if err != nil {
-		return fmt.Errorf("ufw port operation failed: %w", err)
+	if lastErr != nil {
+		return fmt.Errorf("ufw port operation failed: %w", lastErr)
 	}
 
 	return nil

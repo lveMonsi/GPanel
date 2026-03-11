@@ -303,7 +303,7 @@ const handleDelete = async (row: FireInfo) => {
       protocol: row.protocol,
       port: row.port,
       strategy: row.strategy,
-      address: row.address,
+      address: row.address === '0.0.0.0/0' || row.address === 'Anywhere' ? '' : row.address,
     });
 
     ElMessage.success('删除成功');

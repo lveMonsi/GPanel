@@ -259,26 +259,37 @@ func (i *IptablesClient) Port(rule dto.FireInfo, operation string) error {
 		action = "DROP"
 	}
 
-	// 构建规则
-	if rule.Address != "" && rule.Address != "0.0.0.0/0" {
-		// 带源地址的规则
-		if operation == "add" {
-			_, err := ExecWithSudo("iptables", "-A", "INPUT", "-p", rule.Protocol, "-s", rule.Address, "--dport", rule.Port, "-j", action)
-			return err
+	// 当协议为 tcp/udp 时，需要分别对 tcp 和 udp 执行操作
+	protocols := []string{rule.Protocol}
+	if rule.Protocol == "" || rule.Protocol == "tcp/udp" {
+		protocols = []string{"tcp", "udp"}
+	}
+
+	var lastErr error
+	for _, proto := range protocols {
+		var err error
+		// 构建规则
+		if rule.Address != "" && rule.Address != "0.0.0.0/0" {
+			// 带源地址的规则
+			if operation == "add" {
+				_, err = ExecWithSudo("iptables", "-A", "INPUT", "-p", proto, "-s", rule.Address, "--dport", rule.Port, "-j", action)
+			} else {
+				_, err = ExecWithSudo("iptables", "-D", "INPUT", "-p", proto, "-s", rule.Address, "--dport", rule.Port, "-j", action)
+			}
 		} else {
-			_, err := ExecWithSudo("iptables", "-D", "INPUT", "-p", rule.Protocol, "-s", rule.Address, "--dport", rule.Port, "-j", action)
-			return err
+			// 不带源地址的规则
+			if operation == "add" {
+				_, err = ExecWithSudo("iptables", "-A", "INPUT", "-p", proto, "--dport", rule.Port, "-j", action)
+			} else {
+				_, err = ExecWithSudo("iptables", "-D", "INPUT", "-p", proto, "--dport", rule.Port, "-j", action)
+			}
 		}
-	} else {
-		// 不带源地址的规则
-		if operation == "add" {
-			_, err := ExecWithSudo("iptables", "-A", "INPUT", "-p", rule.Protocol, "--dport", rule.Port, "-j", action)
-			return err
-		} else {
-			_, err := ExecWithSudo("iptables", "-D", "INPUT", "-p", rule.Protocol, "--dport", rule.Port, "-j", action)
-			return err
+		if err != nil {
+			lastErr = err
 		}
 	}
+
+	return lastErr
 }
 
 // IP 操作IP规则
