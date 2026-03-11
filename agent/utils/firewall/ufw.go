@@ -118,7 +118,8 @@ func (u *UfwClient) listPortFromShowAdded() ([]dto.FireInfo, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "Added") || strings.HasPrefix(line, "See") {
+		// 过滤空行、标题行、以及 (None) 特殊输出（UFW 无规则时的默认输出）
+		if line == "" || strings.HasPrefix(line, "Added") || strings.HasPrefix(line, "See") || line == "(None)" {
 			continue
 		}
 
@@ -138,7 +139,8 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 
 	// 移除行首的空格和制表符
 	line = strings.TrimSpace(line)
-	if line == "" {
+	// 过滤空行和 (None) 特殊输出（UFW 无规则时的默认输出）
+	if line == "" || line == "(None)" {
 		return itemInfo
 	}
 
@@ -255,6 +257,11 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 		portSpec = fields[len(fields)-1]
 	}
 
+	// 过滤无效的端口规格（空值或 "Anywhere"）
+	if portSpec == "" || portSpec == "Anywhere" {
+		return dto.FireInfo{}
+	}
+
 	// 解析端口和协议
 	if strings.Contains(portSpec, "/") {
 		parts := strings.Split(portSpec, "/")
@@ -262,9 +269,14 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 		if len(parts) > 1 {
 			itemInfo.Protocol = parts[1]
 		}
-	} else if portSpec != "" {
+	} else {
 		itemInfo.Port = portSpec
 		itemInfo.Protocol = "tcp/udp"
+	}
+
+	// 再次验证端口不为空
+	if itemInfo.Port == "" {
+		return dto.FireInfo{}
 	}
 
 	// 设置策略
@@ -339,7 +351,8 @@ func (u *UfwClient) listAddressFromShowAdded() ([]dto.FireInfo, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "Added") || strings.HasPrefix(line, "See") {
+		// 过滤空行、标题行、以及 (None) 特殊输出（UFW 无规则时的默认输出）
+		if line == "" || strings.HasPrefix(line, "Added") || strings.HasPrefix(line, "See") || line == "(None)" {
 			continue
 		}
 
@@ -358,6 +371,10 @@ func (u *UfwClient) parseAddedIPRule(line string) dto.FireInfo {
 	var itemInfo dto.FireInfo
 
 	line = strings.TrimSpace(line)
+	// 过滤空行和 (None) 特殊输出（UFW 无规则时的默认输出）
+	if line == "" || line == "(None)" {
+		return itemInfo
+	}
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
 		return itemInfo
@@ -453,6 +470,11 @@ func (u *UfwClient) ListForward() ([]dto.FireInfo, error) {
 func (u *UfwClient) Port(rule dto.FireInfo, operation string) error {
 	if operation != "add" && operation != "remove" {
 		return fmt.Errorf("invalid operation: %s", operation)
+	}
+
+	// 验证端口不为空
+	if rule.Port == "" || rule.Port == "Anywhere" {
+		return fmt.Errorf("invalid port: port cannot be empty or 'Anywhere'")
 	}
 
 	// 转换策略
@@ -676,12 +698,25 @@ func (u *UfwClient) loadInfo(line string, fireType string) dto.FireInfo {
 
 	// 解析端口规则
 	// 格式: "22/tcp ALLOW IN 192.168.1.1" 或 "22/tcp ALLOW 192.168.1.1"
+	// 注意：fields[0] 可能是 "Anywhere"，需要排除
+	if fields[0] == "Anywhere" {
+		// 这不是端口规则，跳过
+		return itemInfo
+	}
 	if strings.Contains(fields[0], "/") {
-		itemInfo.Port = strings.Split(fields[0], "/")[0]
-		itemInfo.Protocol = strings.Split(fields[0], "/")[1]
+		parts := strings.Split(fields[0], "/")
+		itemInfo.Port = parts[0]
+		if len(parts) > 1 {
+			itemInfo.Protocol = parts[1]
+		}
 	} else {
 		itemInfo.Port = fields[0]
 		itemInfo.Protocol = "tcp/udp"
+	}
+
+	// 过滤无效端口（空端口或非数字端口）
+	if itemInfo.Port == "" || itemInfo.Port == "Anywhere" {
+		return dto.FireInfo{}
 	}
 
 	// 查找策略和 IP 地址
