@@ -1,5 +1,12 @@
 <template>
   <div class="file-manager">
+    <!-- 初始加载状态 -->
+    <div v-if="initialLoading" class="loading-container">
+      <el-icon class="loading-icon" :size="48"><Loading /></el-icon>
+      <p class="loading-text">正在加载文件列表...</p>
+    </div>
+
+    <template v-else>
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <!-- 左侧：导航按钮 -->
@@ -237,6 +244,7 @@
         <el-button type="primary" @click="chmodFiles">确定</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -263,6 +271,7 @@ import {
   View,
   Hide,
   ArrowDown,
+  Loading,
 } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
 import type { FileInfo } from '@/api/interface/file';
@@ -270,6 +279,7 @@ import FileEditor from '@/components/FileEditor.vue';
 
 const currentPath = ref('/');
 const fileList = ref<FileInfo[]>([]);
+const initialLoading = ref(true);
 const showHidden = ref(false);
 const searchKeyword = ref('');
 const selectedFiles = ref<FileInfo[]>([]);
@@ -356,6 +366,7 @@ const toDisplayPath = (backendPath: string): string => {
 
 const loadDrives = async () => {
   try {
+    initialLoading.value = true;
     const response = await fileApi.getDrives();
     if (response.data.code === 200) {
       drives.value = response.data.data;
@@ -369,6 +380,8 @@ const loadDrives = async () => {
     }
   } catch (error: any) {
     ElMessage.error(error.message || '加载盘符列表失败');
+  } finally {
+    initialLoading.value = false;
   }
 };
 
@@ -1089,5 +1102,34 @@ onMounted(() => {
 .toolbar,
 .action-bar {
   animation: fadeIn 0.3s ease-out;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  color: #409eff;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
 }
 </style>

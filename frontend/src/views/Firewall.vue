@@ -1,8 +1,14 @@
 <template>
   <div class="firewall-container">
+    <!-- 初始加载状态 -->
+    <div v-if="initialLoading" class="loading-container">
+      <el-icon class="loading-icon" :size="48"><Loading /></el-icon>
+      <p class="loading-text">正在加载防火墙信息...</p>
+    </div>
+
     <!-- Windows提示 -->
     <el-alert
-      v-if="isWindows"
+      v-else-if="isWindows"
       type="warning"
       :closable="false"
       show-icon
@@ -123,7 +129,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { WarningFilled } from '@element-plus/icons-vue';
+import { WarningFilled, Loading } from '@element-plus/icons-vue';
 import { loadBaseInfo as loadBaseInfoApi, operateFirewall } from '@/api/modules/firewall';
 import { getOSInfo } from '@/api/modules/system';
 import type { FirewallBaseInfo } from '@/api/interface/firewall';
@@ -135,6 +141,7 @@ import FirewallInstall from '@/components/firewall/FirewallInstall.vue';
 const isWindows = ref(false);
 const activeTab = ref('port');
 const loading = ref(false);
+const initialLoading = ref(true);
 const showInstall = ref(false);
 const baseInfo = ref<FirewallBaseInfo>({
   name: '-',
@@ -161,6 +168,7 @@ const loadBaseInfo = async () => {
     console.error('加载防火墙信息失败:', error);
   } finally {
     loading.value = false;
+    initialLoading.value = false;
   }
 };
 
@@ -239,6 +247,8 @@ onMounted(async () => {
   await checkOS();
   if (!isWindows.value) {
     loadBaseInfo();
+  } else {
+    initialLoading.value = false;
   }
 });
 </script>
@@ -319,5 +329,34 @@ onMounted(async () => {
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 13px;
   color: #303133;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  color: #409eff;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
 }
 </style>

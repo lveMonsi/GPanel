@@ -1,5 +1,12 @@
 <template>
   <div class="hosts-container">
+    <!-- 初始加载状态 -->
+    <div v-if="initialLoading" class="loading-container">
+      <el-icon class="loading-icon" :size="48"><Loading /></el-icon>
+      <p class="loading-text">正在加载主机列表...</p>
+    </div>
+
+    <template v-else>
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
@@ -178,6 +185,7 @@
         <el-button type="primary" @click="handleConfirmExport">确定导出</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -195,7 +203,8 @@ import {
   Download,
   Upload,
   InfoFilled,
-  WarningFilled
+  WarningFilled,
+  Loading
 } from '@element-plus/icons-vue'
 import {
   listHosts,
@@ -217,6 +226,7 @@ import HostGroupOperateDialog from '@/components/HostGroupOperate.vue'
 const router = useRouter()
 
 const loading = ref(false)
+const initialLoading = ref(true)
 const searchInfo = ref('')
 const selectedGroupID = ref(0)
 const hosts = ref<HostInfo[]>([])
@@ -236,8 +246,12 @@ const currentHost = ref<HostOperate>()
 const currentGroup = ref<HostGroupOperate>()
 const targetGroupID = ref(0)
 
-const loadHosts = async () => {
-  loading.value = true
+const loadHosts = async (isInitial: boolean = false) => {
+  if (isInitial) {
+    initialLoading.value = true
+  } else {
+    loading.value = true
+  }
   try {
     const res = await listHosts({
       page: pagination.value.page,
@@ -251,6 +265,7 @@ const loadHosts = async () => {
     console.error('加载主机列表失败:', error)
   } finally {
     loading.value = false
+    initialLoading.value = false
   }
 }
 
@@ -421,7 +436,7 @@ const handleImport = () => {
 }
 
 onMounted(() => {
-  loadHosts()
+  loadHosts(true)
   loadGroups()
 })
 </script>
@@ -511,5 +526,34 @@ onMounted(() => {
 
 .export-tips .el-icon {
   font-size: 14px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 200px);
+  min-height: 300px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  color: #409eff;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
 }
 </style>

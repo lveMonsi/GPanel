@@ -5,6 +5,13 @@
     </header>
 
     <main class="content">
+      <!-- 初始加载状态 -->
+      <div v-if="initialLoading" class="loading-container">
+        <el-icon class="loading-icon" :size="48"><Loading /></el-icon>
+        <p class="loading-text">正在加载配置...</p>
+      </div>
+
+      <template v-else>
       <Modal
         v-model:visible="modalVisible"
         :title="modalTitle"
@@ -210,6 +217,7 @@
           </div>
         </div>
       </div>
+      </template>
     </main>
   </div>
 </template>
@@ -220,7 +228,7 @@ import { useRouter } from 'vue-router'
 import axios from '@/utils/axios'
 import Modal from '@/components/Modal.vue'
 import EditModal from '@/components/EditModal.vue'
-import { Refresh, Edit } from '@element-plus/icons-vue'
+import { Refresh, Edit, Loading } from '@element-plus/icons-vue'
 
 interface Config {
   panelUser: string
@@ -235,6 +243,7 @@ interface Config {
 
 const router = useRouter()
 const loading = ref(false)
+const initialLoading = ref(true)
 const modalVisible = ref(false)
 const modalMessage = ref('')
 const modalTitle = ref('提示')
@@ -288,6 +297,8 @@ const fetchConfig = async () => {
     configChanged.value = false
   } catch (error) {
     console.error('获取配置失败:', error)
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -719,5 +730,34 @@ const handleEditSave = (value: string) => {
   color: var(--text-primary);
   font-weight: 500;
   font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 200px);
+  min-height: 300px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  color: #409eff;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
 }
 </style>

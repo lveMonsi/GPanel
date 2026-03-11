@@ -1,6 +1,13 @@
 <template>
   <div class="dashboard">
     <main class="content">
+      <!-- 初始加载状态 -->
+      <div v-if="initialLoading" class="loading-container">
+        <el-icon class="loading-icon" :size="48"><Loading /></el-icon>
+        <p class="loading-text">正在加载系统信息...</p>
+      </div>
+
+      <template v-else>
       <div class="card-grid">
         <!-- 左侧列：告警通知 + 系统监控 -->
         <div class="card-grid-left">
@@ -99,6 +106,7 @@
           </div>
         </div>
       </div>
+      </template>
     </main>
   </div>
 
@@ -140,7 +148,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from '@/utils/axios'
 import SystemStatus from '@/components/SystemStatus.vue'
-import { Bell, Warning, CircleCheck, CircleClose, Check } from '@element-plus/icons-vue'
+import { Bell, Warning, CircleCheck, CircleClose, Check, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 interface CPUInfo {
@@ -219,6 +227,7 @@ interface Alert {
 
 const systemInfo = ref<SystemInfo | null>(null)
 const currentInfo = ref<CurrentInfo | null>(null)
+const initialLoading = ref(true)
 let refreshTimer: number | null = null
 
 // 告警通知相关
@@ -317,6 +326,8 @@ const fetchSystemInfo = async () => {
     currentInfo.value = response.data.currentInfo
   } catch (error) {
     console.error('获取系统信息失败:', error)
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -663,5 +674,34 @@ onUnmounted(() => {
   .detail-value {
     font-size: 0.75rem;
   }
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 200px);
+  min-height: 300px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  color: #409eff;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
 }
 </style>
