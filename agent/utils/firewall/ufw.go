@@ -153,11 +153,22 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 	}
 
 	// 检测规则类型
-	// 格式1: "Anywhere ALLOW 192.168.1.1" - IP 规则
-	// 格式2: "allow from 192.168.1.1" - IP 规则
-	// 格式3: "80/tcp" 或 "allow 80/tcp" - 端口规则
+	// 格式1: "Anywhere ALLOW 192.168.1.1" - 纯 IP 规则
+	// 格式2: "allow from 192.168.1.1" - 纯 IP 规则（无端口）
+	// 格式3: "80/tcp" 或 "allow 80/tcp" - 纯端口规则
+	// 格式4: "allow from 192.168.1.1 to any port 22 proto tcp" - 带 IP 的端口规则
+
+	// 检查是否包含 port 关键字（区分纯 IP 规则和带 IP 的端口规则）
+	hasPort := false
+	for _, field := range fields {
+		if field == "port" {
+			hasPort = true
+			break
+		}
+	}
 
 	// 检查是否是纯 IP 规则（没有端口号）
+	// 纯 IP 规则: 包含 "from" 但不包含 "port"
 	isIPRule := false
 	for _, field := range fields {
 		if field == "from" {
@@ -166,12 +177,17 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 		}
 	}
 
-	// 格式1: "Anywhere ALLOW 192.168.1.1"
+	// 格式1: "Anywhere ALLOW 192.168.1.1" - 这是纯 IP 规则
 	if fields[0] == "Anywhere" {
 		isIPRule = true
 	}
 
-	// 如果是端口规则请求，但检测到是 IP 规则，返回空结构体
+	// 如果包含 port 关键字，则不是纯 IP 规则，而是带 IP 的端口规则
+	if hasPort {
+		isIPRule = false
+	}
+
+	// 如果是端口规则请求，但检测到是纯 IP 规则，返回空结构体
 	if fireType == "port" && isIPRule {
 		return itemInfo
 	}
@@ -181,7 +197,7 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 		return itemInfo
 	}
 
-	// 解析 IP 规则
+	// 解析纯 IP 规则
 	if isIPRule {
 		// 格式1: "Anywhere ALLOW 192.168.1.1"
 		if fields[0] == "Anywhere" && len(fields) >= 3 {
@@ -207,18 +223,30 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 		return itemInfo
 	}
 
-	// 解析端口规则
-	// 格式: "80/tcp" 或 "allow 80/tcp" 或 "deny 22/tcp"
+	// 解析端口规则（包括带 IP 的端口规则）
+	// 格式: "80/tcp" 或 "allow 80/tcp" 或 "allow from 192.168.1.1 to any port 22 proto tcp"
 	var portSpec string
 	action := "allow" // 默认允许
 
+	// 提取策略和端口
 	for i, field := range fields {
 		if field == "allow" || field == "deny" {
 			action = field
-			if i+1 < len(fields) {
-				portSpec = fields[i+1]
+		} else if field == "port" && i+1 < len(fields) {
+			// 带 IP 的端口规则: "port 22" 后面跟着端口号
+			portSpec = fields[i+1]
+		}
+	}
+
+	// 如果没有找到 port 关键字，尝试直接解析端口规格
+	if portSpec == "" {
+		for i, field := range fields {
+			if field == "allow" || field == "deny" {
+				if i+1 < len(fields) {
+					portSpec = fields[i+1]
+				}
+				break
 			}
-			break
 		}
 	}
 
@@ -591,6 +619,11 @@ func (u *UfwClient) EnableForward() error {
 }
 
 // loadInfo 解析规则信息
+// UFW status verbose 输出格式示例：
+// IPv4: "22/tcp                   ALLOW IN    192.168.1.1"
+// IPv4: "80/tcp                   ALLOW IN    Anywhere"
+// IPv6: "22/tcp (v6)              ALLOW IN    Anywhere (v6)"
+// 纯IP: "Anywhere                ALLOW IN    192.168.1.1"
 func (u *UfwClient) loadInfo(line string, fireType string) dto.FireInfo {
 	fields := strings.Fields(line)
 	var itemInfo dto.FireInfo
@@ -603,26 +636,54 @@ func (u *UfwClient) loadInfo(line string, fireType string) dto.FireInfo {
 		return itemInfo
 	}
 
-	if fields[1] == "(v6)" && fireType == "port" {
+	// 检测是否是 IPv6 规则
+	isIPv6 := false
+	for _, field := range fields {
+		if field == "(v6)" {
+			isIPv6 = true
+			break
+		}
+	}
+
+	// 跳过 IPv6 端口规则（端口规则只显示 IPv4）
+	if isIPv6 && fireType == "port" {
 		return itemInfo
 	}
 
+	// 解析纯 IP 规则（Anywhere 开头的规则）
 	if fields[0] == "Anywhere" && fireType != "port" {
 		itemInfo.Strategy = "drop"
-		if fields[1] == "ALLOW" {
-			itemInfo.Strategy = "accept"
-		}
-		if fields[1] == "(v6)" {
-			if fields[2] == "ALLOW" {
+		// 查找 ALLOW 或 DENY
+		for i, field := range fields {
+			if field == "ALLOW" {
 				itemInfo.Strategy = "accept"
+				// ALLOW 后面可能跟着 IN/OUT，IP 地址在后面
+				// 格式: "Anywhere ALLOW IN 192.168.1.1"
+				if i+2 < len(fields) {
+					itemInfo.Address = fields[i+2]
+				} else if i+1 < len(fields) {
+					itemInfo.Address = fields[i+1]
+				}
+				break
+			} else if field == "DENY" {
+				itemInfo.Strategy = "drop"
+				if i+2 < len(fields) {
+					itemInfo.Address = fields[i+2]
+				} else if i+1 < len(fields) {
+					itemInfo.Address = fields[i+1]
+				}
+				break
 			}
-			itemInfo.Address = fields[4]
-		} else {
-			itemInfo.Address = fields[3]
+		}
+		// 过滤掉 Anywhere (v6) 这样的地址
+		if itemInfo.Address == "Anywhere" || strings.Contains(itemInfo.Address, "(v6)") {
+			itemInfo.Address = ""
 		}
 		return itemInfo
 	}
 
+	// 解析端口规则
+	// 格式: "22/tcp ALLOW IN 192.168.1.1" 或 "22/tcp ALLOW 192.168.1.1"
 	if strings.Contains(fields[0], "/") {
 		itemInfo.Port = strings.Split(fields[0], "/")[0]
 		itemInfo.Protocol = strings.Split(fields[0], "/")[1]
@@ -631,14 +692,38 @@ func (u *UfwClient) loadInfo(line string, fireType string) dto.FireInfo {
 		itemInfo.Protocol = "tcp/udp"
 	}
 
+	// 查找策略和 IP 地址
+	// 遍历字段找到 ALLOW/DENY，然后提取后面的 IP 地址
 	itemInfo.Family = "ipv4"
-	if fields[1] == "ALLOW" {
-		itemInfo.Strategy = "accept"
-	} else {
-		itemInfo.Strategy = "drop"
+	if isIPv6 {
+		itemInfo.Family = "ipv6"
 	}
 
-	itemInfo.Address = fields[3]
+	for i, field := range fields {
+		if field == "ALLOW" {
+			itemInfo.Strategy = "accept"
+			// ALLOW 后面可能跟着 IN/OUT，IP 地址可能在 i+2 或 i+1 位置
+			if i+2 < len(fields) && (fields[i+1] == "IN" || fields[i+1] == "OUT") {
+				itemInfo.Address = fields[i+2]
+			} else if i+1 < len(fields) {
+				itemInfo.Address = fields[i+1]
+			}
+			break
+		} else if field == "DENY" {
+			itemInfo.Strategy = "drop"
+			if i+2 < len(fields) && (fields[i+1] == "IN" || fields[i+1] == "OUT") {
+				itemInfo.Address = fields[i+2]
+			} else if i+1 < len(fields) {
+				itemInfo.Address = fields[i+1]
+			}
+			break
+		}
+	}
+
+	// 过滤掉 Anywhere 这样的通用地址
+	if itemInfo.Address == "Anywhere" || itemInfo.Address == "Anywhere" || strings.Contains(itemInfo.Address, "(v6)") {
+		itemInfo.Address = ""
+	}
 
 	return itemInfo
 }

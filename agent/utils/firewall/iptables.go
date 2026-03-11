@@ -84,15 +84,19 @@ func (i *IptablesClient) ListPort() ([]dto.FireInfo, error) {
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 4 {
+		// iptables -L INPUT -n --line-numbers 输出格式:
+		// num  target  prot  opt  source  destination  [options...]
+		//  0    1       2     3     4         5           6+
+		// 需要至少 7 个字段才能包含端口信息
+		if len(fields) < 7 {
 			continue
 		}
 
 		// 解析规则格式
 		rule := dto.FireInfo{
 			Num:      fields[0],
-			Strategy: fields[2],
-			Protocol: fields[1],
+			Protocol: fields[2],
+			Strategy: fields[1],
 		}
 
 		// 转换策略
@@ -102,18 +106,21 @@ func (i *IptablesClient) ListPort() ([]dto.FireInfo, error) {
 			rule.Strategy = "drop"
 		}
 
-		// 提取端口
-		for idx := 3; idx < len(fields); idx++ {
+		// 按固定位置提取源地址（fields[4] 是 source 列）
+		sourceAddr := fields[4]
+		if sourceAddr != "0.0.0.0/0" && sourceAddr != "::/0" && sourceAddr != "anywhere" {
+			rule.Address = sourceAddr
+		}
+
+		// 提取端口（支持 dpt: 单端口和 dpts: 端口范围）
+		for idx := 6; idx < len(fields); idx++ {
 			if strings.HasPrefix(fields[idx], "dpt:") {
 				rule.Port = strings.TrimPrefix(fields[idx], "dpt:")
 				break
 			}
-		}
-
-		// 提取源地址
-		for idx := 3; idx < len(fields); idx++ {
-			if fields[idx] != "0.0.0.0/0" && !strings.Contains(fields[idx], "dpt:") {
-				rule.Address = fields[idx]
+			if strings.HasPrefix(fields[idx], "dpts:") {
+				// 端口范围格式: dpts:1000:2000
+				rule.Port = strings.TrimPrefix(fields[idx], "dpts:")
 				break
 			}
 		}
@@ -143,14 +150,17 @@ func (i *IptablesClient) ListAddress() ([]dto.FireInfo, error) {
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 4 {
+		// iptables -L INPUT -n --line-numbers 输出格式:
+		// num  target  prot  opt  source  destination  [options...]
+		//  0    1       2     3     4         5           6+
+		if len(fields) < 6 {
 			continue
 		}
 
 		rule := dto.FireInfo{
 			Num:      fields[0],
-			Strategy: fields[2],
-			Protocol: fields[1],
+			Protocol: fields[2],
+			Strategy: fields[1],
 		}
 
 		if rule.Strategy == "ACCEPT" {
@@ -159,16 +169,23 @@ func (i *IptablesClient) ListAddress() ([]dto.FireInfo, error) {
 			rule.Strategy = "drop"
 		}
 
-		// 提取源地址（排除端口规则）
-		for idx := 3; idx < len(fields); idx++ {
-			if fields[idx] != "0.0.0.0/0" && !strings.Contains(fields[idx], "dpt:") {
-				rule.Address = fields[idx]
+		// 按固定位置提取源地址（fields[4] 是 source 列）
+		sourceAddr := fields[4]
+		if sourceAddr != "0.0.0.0/0" && sourceAddr != "::/0" && sourceAddr != "anywhere" {
+			rule.Address = sourceAddr
+		}
+
+		// 只返回纯IP规则（不包含端口信息）
+		isPortRule := false
+		for idx := 6; idx < len(fields); idx++ {
+			if strings.HasPrefix(fields[idx], "dpt:") || strings.HasPrefix(fields[idx], "dpts:") {
+				isPortRule = true
 				break
 			}
 		}
 
-		// 只返回纯IP规则
-		if rule.Address != "" && !strings.Contains(line, "dpt:") {
+		// 只返回有源地址且不是端口规则的规则
+		if rule.Address != "" && !isPortRule {
 			rules = append(rules, rule)
 		}
 	}
