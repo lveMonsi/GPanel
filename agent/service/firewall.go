@@ -42,6 +42,17 @@ func (s *FirewallService) LoadBaseInfo() (dto.FirewallBaseInfo, error) {
 		}, nil
 	}
 
+	// 验证防火墙客户端是否真正可用
+	// 尝试获取状态，如果失败则认为防火墙不可用
+	_, err := s.client.Status()
+	if err != nil {
+		global.Error("Firewall client status check failed: " + err.Error())
+		return dto.FirewallBaseInfo{
+			Name:    string(firewallType),
+			IsExist: false,
+		}, nil
+	}
+
 	var baseInfo dto.FirewallBaseInfo
 	baseInfo.Version = "-"
 	baseInfo.Name = s.client.Name()

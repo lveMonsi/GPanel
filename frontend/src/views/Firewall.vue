@@ -190,13 +190,32 @@ const loadBaseInfo = async () => {
     if (res && res.data) {
       baseInfo.value = res.data;
       pingEnabled.value = res.data.pingStatus === 'enabled';
+    } else {
+      // 响应无数据，重置为未安装状态
+      resetBaseInfo();
     }
   } catch (error) {
     console.error('加载防火墙信息失败:', error);
+    // 加载失败时重置为未安装状态
+    resetBaseInfo();
   } finally {
     loading.value = false;
     initialLoading.value = false;
   }
+};
+
+// 重置防火墙信息为未安装状态
+const resetBaseInfo = () => {
+  baseInfo.value = {
+    name: '-',
+    isExist: false,
+    isActive: false,
+    isInit: false,
+    isBind: false,
+    version: '-',
+    pingStatus: 'disabled',
+  };
+  pingEnabled.value = false;
 };
 
 const handleOperate = async (operation: string) => {
@@ -261,6 +280,9 @@ const handleInstalled = async () => {
 // 处理卸载完成
 const handleUninstalled = async () => {
   showUninstall.value = false;
+  // 先重置为未安装状态，防止在加载过程中显示旧数据
+  resetBaseInfo();
+  // 重新加载基础信息
   await loadBaseInfo();
 };
 
