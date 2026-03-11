@@ -228,15 +228,19 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 	// 解析端口规则（包括带 IP 的端口规则）
 	// 格式: "80/tcp" 或 "allow 80/tcp" 或 "allow from 192.168.1.1 to any port 22 proto tcp"
 	var portSpec string
+	var protoSpec string
 	action := "allow" // 默认允许
 
-	// 提取策略和端口
+	// 提取策略、端口和协议
 	for i, field := range fields {
 		if field == "allow" || field == "deny" {
 			action = field
 		} else if field == "port" && i+1 < len(fields) {
 			// 带 IP 的端口规则: "port 22" 后面跟着端口号
 			portSpec = fields[i+1]
+		} else if field == "proto" && i+1 < len(fields) {
+			// 带 IP 的端口规则: "proto tcp" 后面跟着协议
+			protoSpec = fields[i+1]
 		}
 	}
 
@@ -271,7 +275,12 @@ func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
 		}
 	} else {
 		itemInfo.Port = portSpec
-		itemInfo.Protocol = "tcp/udp"
+		// 如果有独立的 proto 字段，使用它；否则默认为 tcp/udp
+		if protoSpec != "" {
+			itemInfo.Protocol = protoSpec
+		} else {
+			itemInfo.Protocol = "tcp/udp"
+		}
 	}
 
 	// 再次验证端口不为空
