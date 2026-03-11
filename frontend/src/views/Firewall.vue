@@ -125,6 +125,7 @@ import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { WarningFilled } from '@element-plus/icons-vue';
 import { loadBaseInfo as loadBaseInfoApi, operateFirewall } from '@/api/modules/firewall';
+import { getOSInfo } from '@/api/modules/system';
 import type { FirewallBaseInfo } from '@/api/interface/firewall';
 import PortRules from '@/components/firewall/PortRules.vue';
 import IPRules from '@/components/firewall/IPRules.vue';
@@ -225,9 +226,10 @@ const handleInstalled = async () => {
 // 检测操作系统
 const checkOS = async () => {
   try {
-    const response = await fetch('/api/v1/system/os');
-    const data = await response.json();
-    isWindows.value = data.os === 'windows';
+    const res = await getOSInfo();
+    if (res && res.data) {
+      isWindows.value = res.data.os === 'windows';
+    }
   } catch (error) {
     console.error('检测操作系统失败:', error);
   }
