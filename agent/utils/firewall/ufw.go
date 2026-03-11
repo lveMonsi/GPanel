@@ -77,6 +77,12 @@ func (u *UfwClient) ListPort() ([]dto.FireInfo, error) {
 		return nil, err
 	}
 
+	// 检查防火墙是否禁用
+	if strings.Contains(output, "Status: inactive") {
+		// 防火墙禁用时，使用 show added 获取已添加的规则
+		return u.listPortFromShowAdded()
+	}
+
 	portInfos := strings.Split(output, "\n")
 	var datas []dto.FireInfo
 	isStart := false
@@ -100,11 +106,124 @@ func (u *UfwClient) ListPort() ([]dto.FireInfo, error) {
 	return datas, nil
 }
 
+// listPortFromShowAdded 从 ufw show added 获取端口规则（防火墙禁用时使用）
+func (u *UfwClient) listPortFromShowAdded() ([]dto.FireInfo, error) {
+	output, err := ExecWithSudo("ufw", "show", "added")
+	if err != nil {
+		return nil, err
+	}
+
+	var datas []dto.FireInfo
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Added") || strings.HasPrefix(line, "See") {
+			continue
+		}
+
+		itemFire := u.parseAddedRule(line, "port")
+		if itemFire.Port != "" && itemFire.Port != "Anywhere" && !strings.Contains(itemFire.Port, ".") {
+			itemFire.Port = strings.ReplaceAll(itemFire.Port, ":", "-")
+			datas = append(datas, itemFire)
+		}
+	}
+
+	return datas, nil
+}
+
+// parseAddedRule 解析 ufw show added 输出的规则
+func (u *UfwClient) parseAddedRule(line string, fireType string) dto.FireInfo {
+	var itemInfo dto.FireInfo
+
+	// 移除行首的空格和制表符
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return itemInfo
+	}
+
+	// 跳过 (v6) 规则（端口规则）
+	if strings.Contains(line, "(v6)") && fireType == "port" {
+		return itemInfo
+	}
+
+	// 解析格式: "80/tcp" 或 "80" 或 "allow 80/tcp" 或 "deny 22/tcp"
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return itemInfo
+	}
+
+	// 提取策略和端口规格
+	var portSpec string
+	action := "allow" // 默认允许
+
+	for i, field := range fields {
+		if field == "allow" || field == "deny" {
+			action = field
+			if i+1 < len(fields) {
+				portSpec = fields[i+1]
+			}
+			break
+		}
+	}
+
+	// 如果没有找到 action 关键字，第一个字段就是端口规格
+	if portSpec == "" {
+		portSpec = fields[len(fields)-1]
+		// 检查是否第一个字段就是端口规格（没有 action）
+		if len(fields) == 1 || (len(fields) > 1 && fields[0] != "allow" && fields[0] != "deny") {
+			// 格式可能是 "Anywhere ALLOW 192.168.1.1" (IP规则)
+			if fields[0] == "Anywhere" && fireType != "port" {
+				itemInfo.Strategy = "accept"
+				if len(fields) >= 3 {
+					itemInfo.Address = fields[2]
+				}
+				return itemInfo
+			}
+		}
+	}
+
+	// 解析端口和协议
+	if strings.Contains(portSpec, "/") {
+		parts := strings.Split(portSpec, "/")
+		itemInfo.Port = parts[0]
+		if len(parts) > 1 {
+			itemInfo.Protocol = parts[1]
+		}
+	} else {
+		itemInfo.Port = portSpec
+		itemInfo.Protocol = "tcp/udp"
+	}
+
+	// 设置策略
+	if action == "allow" {
+		itemInfo.Strategy = "accept"
+	} else {
+		itemInfo.Strategy = "drop"
+	}
+
+	// 提取 IP 地址（如果有）
+	for i, field := range fields {
+		if field == "from" && i+1 < len(fields) {
+			itemInfo.Address = fields[i+1]
+			break
+		}
+	}
+
+	return itemInfo
+}
+
 // ListAddress 列出IP规则
 func (u *UfwClient) ListAddress() ([]dto.FireInfo, error) {
 	output, err := ExecWithSudo("ufw", "status", "verbose")
 	if err != nil {
 		return nil, err
+	}
+
+	// 检查防火墙是否禁用
+	if strings.Contains(output, "Status: inactive") {
+		// 防火墙禁用时，使用 show added 获取已添加的规则
+		return u.listAddressFromShowAdded()
 	}
 
 	portInfos := strings.Split(output, "\n")
@@ -134,6 +253,72 @@ func (u *UfwClient) ListAddress() ([]dto.FireInfo, error) {
 	}
 
 	return datas, nil
+}
+
+// listAddressFromShowAdded 从 ufw show added 获取 IP 规则（防火墙禁用时使用）
+func (u *UfwClient) listAddressFromShowAdded() ([]dto.FireInfo, error) {
+	output, err := ExecWithSudo("ufw", "show", "added")
+	if err != nil {
+		return nil, err
+	}
+
+	var datas []dto.FireInfo
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Added") || strings.HasPrefix(line, "See") {
+			continue
+		}
+
+		// 解析 IP 规则，格式如: "Anywhere ALLOW 192.168.1.1" 或 "allow from 192.168.1.1"
+		itemFire := u.parseAddedIPRule(line)
+		if itemFire.Address != "" && itemFire.Port == "" {
+			datas = append(datas, itemFire)
+		}
+	}
+
+	return datas, nil
+}
+
+// parseAddedIPRule 解析 ufw show added 输出的 IP 规则
+func (u *UfwClient) parseAddedIPRule(line string) dto.FireInfo {
+	var itemInfo dto.FireInfo
+
+	line = strings.TrimSpace(line)
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return itemInfo
+	}
+
+	// 格式1: "Anywhere ALLOW 192.168.1.1"
+	// 格式2: "allow from 192.168.1.1"
+	// 格式3: "deny from 192.168.1.1"
+
+	// 检查格式1
+	if fields[0] == "Anywhere" && len(fields) >= 3 {
+		if fields[1] == "ALLOW" {
+			itemInfo.Strategy = "accept"
+		} else {
+			itemInfo.Strategy = "drop"
+		}
+		itemInfo.Address = fields[2]
+		return itemInfo
+	}
+
+	// 检查格式2和3
+	for i, field := range fields {
+		if field == "allow" {
+			itemInfo.Strategy = "accept"
+		} else if field == "deny" {
+			itemInfo.Strategy = "drop"
+		} else if field == "from" && i+1 < len(fields) {
+			itemInfo.Address = fields[i+1]
+			break
+		}
+	}
+
+	return itemInfo
 }
 
 // ListForward 列出端口转发规则（使用iptables）
