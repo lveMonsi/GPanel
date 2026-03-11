@@ -47,20 +47,17 @@ const (
 // 返回值: 防火墙类型，是否安装
 func CheckFirewallInstalled() (FirewallType, bool) {
 	// 优先检测 ufw
-	_, err := Exec("which", "ufw")
-	if err == nil {
+	if checkCommand("ufw") {
 		return FirewallTypeUfw, true
 	}
 
 	// 检测 firewalld
-	_, err = Exec("which", "firewall-cmd")
-	if err == nil {
+	if checkCommand("firewall-cmd") {
 		return FirewallTypeFirewalld, true
 	}
 
 	// 检测 iptables 命令是否存在
-	_, err = Exec("which", "iptables")
-	if err == nil {
+	if checkCommand("iptables") {
 		return FirewallTypeIptables, true
 	}
 
