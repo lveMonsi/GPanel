@@ -145,9 +145,9 @@
           <span class="title">存储</span>
         </div>
         <GaugeChart
-          :value="diskInfo.length > 0 ? diskInfo[0].usedPercent : 0"
+          :value="rootDisk ? rootDisk.usedPercent : 0"
           label="主盘使用率"
-          :sub-label="diskInfo.length > 0 ? `${formatBytes(diskInfo[0].used)} / ${formatBytes(diskInfo[0].total)}` : '无数据'"
+          :sub-label="rootDisk ? `${formatBytes(rootDisk.used)} / ${formatBytes(rootDisk.total)}` : '无数据'"
           unit="%"
         />
         <!-- 存储悬浮详情 -->
@@ -157,22 +157,22 @@
             <span>存储详情</span>
           </div>
           <div class="tooltip-content">
-            <template v-if="diskInfo.length > 0">
-              <div v-for="disk in diskInfo" :key="disk.mountpoint" class="disk-section">
+            <template v-if="rootDisk">
+              <div class="disk-section">
                 <!-- 基本信息单列 -->
                 <div class="tooltip-section disk-base-info">
                   <div class="section-title">基本信息</div>
                   <div class="info-row">
                     <span class="info-label">挂载点</span>
-                    <span class="info-value">{{ disk.mountpoint }}</span>
+                    <span class="info-value">{{ rootDisk.mountpoint }}</span>
                   </div>
                   <div class="info-row">
                     <span class="info-label">类型</span>
-                    <span class="info-value">{{ disk.fstype }}</span>
+                    <span class="info-value">{{ rootDisk.fstype }}</span>
                   </div>
                   <div class="info-row">
                     <span class="info-label">文件系统</span>
-                    <span class="info-value">{{ disk.device }}</span>
+                    <span class="info-value">{{ rootDisk.device }}</span>
                   </div>
                 </div>
                 <!-- Inode 和磁盘双列 -->
@@ -181,38 +181,38 @@
                     <div class="section-title">Inode</div>
                     <div class="info-row">
                       <span class="info-label">总数</span>
-                      <span class="info-value">{{ formatNumber(disk.inodesTotal) }}</span>
+                      <span class="info-value">{{ formatNumber(rootDisk.inodesTotal) }}</span>
                     </div>
                     <div class="info-row">
                       <span class="info-label">已用</span>
-                      <span class="info-value">{{ formatNumber(disk.inodesUsed) }}</span>
+                      <span class="info-value">{{ formatNumber(rootDisk.inodesUsed) }}</span>
                     </div>
                     <div class="info-row">
                       <span class="info-label">可用</span>
-                      <span class="info-value">{{ formatNumber(disk.inodesFree) }}</span>
+                      <span class="info-value">{{ formatNumber(rootDisk.inodesFree) }}</span>
                     </div>
                     <div class="info-row">
                       <span class="info-label">使用率</span>
-                      <span class="info-value">{{ disk.inodesUsedPercent.toFixed(2) }}%</span>
+                      <span class="info-value">{{ rootDisk.inodesUsedPercent.toFixed(2) }}%</span>
                     </div>
                   </div>
                   <div class="tooltip-section">
                     <div class="section-title">磁盘</div>
                     <div class="info-row">
                       <span class="info-label">总数</span>
-                      <span class="info-value">{{ formatBytes(disk.total) }}</span>
+                      <span class="info-value">{{ formatBytes(rootDisk.total) }}</span>
                     </div>
                     <div class="info-row">
                       <span class="info-label">已用</span>
-                      <span class="info-value">{{ formatBytes(disk.used) }}</span>
+                      <span class="info-value">{{ formatBytes(rootDisk.used) }}</span>
                     </div>
                     <div class="info-row">
                       <span class="info-label">可用</span>
-                      <span class="info-value">{{ formatBytes(disk.free) }}</span>
+                      <span class="info-value">{{ formatBytes(rootDisk.free) }}</span>
                     </div>
                     <div class="info-row">
                       <span class="info-label">使用率</span>
-                      <span class="info-value">{{ disk.usedPercent.toFixed(2) }}%</span>
+                      <span class="info-value">{{ rootDisk.usedPercent.toFixed(2) }}%</span>
                     </div>
                   </div>
                 </div>
@@ -227,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Monitor, Cpu, TrendCharts, Coin } from '@element-plus/icons-vue'
 import GaugeChart from './GaugeChart.vue'
 
@@ -277,13 +277,18 @@ interface DiskInfo {
   inodesUsedPercent: number
 }
 
-defineProps<{
+const props = defineProps<{
   cpuInfo: CPUInfo
   memoryInfo: MemoryInfo
   swapInfo: SwapInfo
   loadInfo: LoadInfo
   diskInfo: DiskInfo[]
 }>()
+
+// 只获取挂载点为 / 的磁盘
+const rootDisk = computed(() => {
+  return props.diskInfo.find(disk => disk.mountpoint === '/')
+})
 
 const tooltipType = ref<'cpu' | 'memory' | 'load' | 'disk' | null>(null)
 const tooltipDirection = ref<'top' | 'bottom'>('top')

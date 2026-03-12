@@ -175,6 +175,11 @@ func getDiskInfo() ([]models.DiskInfo, error) {
 
 	var diskInfos []models.DiskInfo
 	for _, partition := range partitions {
+		// 只获取挂载点为 / 的磁盘
+		if partition.Mountpoint != "/" {
+			continue
+		}
+
 		usage, err := disk.Usage(partition.Mountpoint)
 		if err != nil {
 			continue
