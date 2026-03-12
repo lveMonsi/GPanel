@@ -18,6 +18,7 @@ type SystemInfo struct {
 type CurrentInfo struct {
 	CPUInfo          CPUInfo      `json:"cpuInfo"`
 	MemoryInfo       MemoryInfo   `json:"memoryInfo"`
+	SwapInfo         SwapInfo     `json:"swapInfo"`
 	DiskInfo         []DiskInfo   `json:"diskInfo"`
 	LoadInfo         LoadInfo     `json:"loadInfo"`
 	NetworkInfo      NetworkInfo  `json:"networkInfo"`
@@ -40,6 +41,13 @@ type MemoryInfo struct {
 	UsedPercent float64 `json:"usedPercent"`
 	Cached      uint64  `json:"cached"`
 	Buffers     uint64  `json:"buffers"`
+}
+
+type SwapInfo struct {
+	Total       uint64  `json:"total"`
+	Used        uint64  `json:"used"`
+	Free        uint64  `json:"free"`
+	UsedPercent float64 `json:"usedPercent"`
 }
 
 type DiskInfo struct {

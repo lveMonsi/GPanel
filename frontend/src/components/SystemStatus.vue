@@ -61,23 +61,44 @@
             <span>内存详情</span>
           </div>
           <div class="tooltip-content">
-            <div class="tooltip-section">
-              <div class="section-title">系统</div>
-              <div class="info-row">
-                <span class="info-label">总数</span>
-                <span class="info-value">{{ formatBytes(memoryInfo.total) }}</span>
+            <div class="memory-columns">
+              <div class="tooltip-section">
+                <div class="section-title">系统内存</div>
+                <div class="info-row">
+                  <span class="info-label">总数</span>
+                  <span class="info-value">{{ formatBytes(memoryInfo.total) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">已用</span>
+                  <span class="info-value">{{ formatBytes(memoryInfo.used) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">可用</span>
+                  <span class="info-value">{{ formatBytes(memoryInfo.available) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">使用率</span>
+                  <span class="info-value">{{ memoryInfo.usedPercent.toFixed(2) }}%</span>
+                </div>
               </div>
-              <div class="info-row">
-                <span class="info-label">已用</span>
-                <span class="info-value">{{ formatBytes(memoryInfo.used) }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">可用</span>
-                <span class="info-value">{{ formatBytes(memoryInfo.available) }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">使用率</span>
-                <span class="info-value">{{ memoryInfo.usedPercent.toFixed(2) }}%</span>
+              <div class="tooltip-section">
+                <div class="section-title">SWAP 分区</div>
+                <div class="info-row">
+                  <span class="info-label">总数</span>
+                  <span class="info-value">{{ formatBytes(swapInfo.total) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">已用</span>
+                  <span class="info-value">{{ formatBytes(swapInfo.used) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">可用</span>
+                  <span class="info-value">{{ formatBytes(swapInfo.free) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">使用率</span>
+                  <span class="info-value">{{ swapInfo.usedPercent.toFixed(2) }}%</span>
+                </div>
               </div>
             </div>
           </div>
@@ -208,6 +229,13 @@ interface MemoryInfo {
   buffers: number
 }
 
+interface SwapInfo {
+  total: number
+  used: number
+  free: number
+  usedPercent: number
+}
+
 interface LoadInfo {
   load1: number
   load5: number
@@ -227,6 +255,7 @@ interface DiskInfo {
 defineProps<{
   cpuInfo: CPUInfo
   memoryInfo: MemoryInfo
+  swapInfo: SwapInfo
   loadInfo: LoadInfo
   diskInfo: DiskInfo[]
 }>()
@@ -426,7 +455,8 @@ const formatBytes = (bytes: number): string => {
 }
 
 .cpu-columns,
-.disk-columns {
+.disk-columns,
+.memory-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
@@ -488,7 +518,8 @@ const formatBytes = (bytes: number): string => {
   }
 
   .cpu-columns,
-  .disk-columns {
+  .disk-columns,
+  .memory-columns {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }

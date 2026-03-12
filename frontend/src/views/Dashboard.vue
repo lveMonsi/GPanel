@@ -55,6 +55,7 @@
                 v-if="currentInfo"
                 :cpu-info="currentInfo.cpuInfo"
                 :memory-info="currentInfo.memoryInfo"
+                :swap-info="currentInfo.swapInfo"
                 :load-info="currentInfo.loadInfo"
                 :disk-info="currentInfo.diskInfo"
               />
@@ -170,6 +171,13 @@ interface MemoryInfo {
   buffers: number
 }
 
+interface SwapInfo {
+  total: number
+  used: number
+  free: number
+  usedPercent: number
+}
+
 interface DiskInfo {
   device: string
   mountpoint: string
@@ -196,6 +204,7 @@ interface NetworkInfo {
 interface CurrentInfo {
   cpuInfo: CPUInfo
   memoryInfo: MemoryInfo
+  swapInfo: SwapInfo
   diskInfo: DiskInfo[]
   loadInfo: LoadInfo
   networkInfo: NetworkInfo

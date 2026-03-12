@@ -24,7 +24,7 @@ func GetSystemInfo() (*models.SystemInfo, error) {
 	processes, _ := process.Processes()
 	procs := uint64(len(processes))
 
-	cpuInfo, memInfo, diskInfo, loadInfo, networkInfo, err := GetCurrentInfo()
+	cpuInfo, memInfo, swapInfo, diskInfo, loadInfo, networkInfo, err := GetCurrentInfo()
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +46,7 @@ func GetSystemInfo() (*models.SystemInfo, error) {
 		CurrentInfo: models.CurrentInfo{
 			CPUInfo:     cpuInfo,
 			MemoryInfo:  memInfo,
+			SwapInfo:    swapInfo,
 			DiskInfo:    diskInfo,
 			LoadInfo:    loadInfo,
 			NetworkInfo: networkInfo,
@@ -53,33 +54,38 @@ func GetSystemInfo() (*models.SystemInfo, error) {
 	}, nil
 }
 
-func GetCurrentInfo() (models.CPUInfo, models.MemoryInfo, []models.DiskInfo, models.LoadInfo, models.NetworkInfo, error) {
+func GetCurrentInfo() (models.CPUInfo, models.MemoryInfo, models.SwapInfo, []models.DiskInfo, models.LoadInfo, models.NetworkInfo, error) {
 	cpuInfo, err := getCPUInfo()
 	if err != nil {
-		return models.CPUInfo{}, models.MemoryInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
+		return models.CPUInfo{}, models.MemoryInfo{}, models.SwapInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
 	}
 
 	memInfo, err := getMemoryInfo()
 	if err != nil {
-		return models.CPUInfo{}, models.MemoryInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
+		return models.CPUInfo{}, models.MemoryInfo{}, models.SwapInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
+	}
+
+	swapInfo, err := getSwapInfo()
+	if err != nil {
+		return models.CPUInfo{}, models.MemoryInfo{}, models.SwapInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
 	}
 
 	diskInfo, err := getDiskInfo()
 	if err != nil {
-		return models.CPUInfo{}, models.MemoryInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
+		return models.CPUInfo{}, models.MemoryInfo{}, models.SwapInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
 	}
 
 	loadInfo, err := getLoadInfo()
 	if err != nil {
-		return models.CPUInfo{}, models.MemoryInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
+		return models.CPUInfo{}, models.MemoryInfo{}, models.SwapInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
 	}
 
 	networkInfo, err := getNetworkInfo()
 	if err != nil {
-		return models.CPUInfo{}, models.MemoryInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
+		return models.CPUInfo{}, models.MemoryInfo{}, models.SwapInfo{}, nil, models.LoadInfo{}, models.NetworkInfo{}, err
 	}
 
-	return cpuInfo, memInfo, diskInfo, loadInfo, networkInfo, nil
+	return cpuInfo, memInfo, swapInfo, diskInfo, loadInfo, networkInfo, nil
 }
 
 func getCPUInfo() (models.CPUInfo, error) {
@@ -144,6 +150,20 @@ func getMemoryInfo() (models.MemoryInfo, error) {
 		UsedPercent: vmem.UsedPercent,
 		Cached:      vmem.Cached,
 		Buffers:     vmem.Buffers,
+	}, nil
+}
+
+func getSwapInfo() (models.SwapInfo, error) {
+	swap, err := mem.SwapMemory()
+	if err != nil {
+		return models.SwapInfo{}, err
+	}
+
+	return models.SwapInfo{
+		Total:       swap.Total,
+		Used:        swap.Used,
+		Free:        swap.Free,
+		UsedPercent: swap.UsedPercent,
 	}, nil
 }
 

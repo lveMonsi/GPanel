@@ -29,7 +29,7 @@ func GetSystemInfo(c *gin.Context) {
 
 // GetCurrentInfo 获取当前实时信息
 func GetCurrentInfo(c *gin.Context) {
-	cpuInfo, memInfo, diskInfo, loadInfo, networkInfo, err := utils.GetCurrentInfo()
+	cpuInfo, memInfo, swapInfo, diskInfo, loadInfo, networkInfo, err := utils.GetCurrentInfo()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -37,6 +37,7 @@ func GetCurrentInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"cpuInfo":     cpuInfo,
 		"memoryInfo":  memInfo,
+		"swapInfo":    swapInfo,
 		"diskInfo":    diskInfo,
 		"loadInfo":    loadInfo,
 		"networkInfo": networkInfo,
