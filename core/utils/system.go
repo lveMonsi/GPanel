@@ -181,13 +181,17 @@ func getDiskInfo() ([]models.DiskInfo, error) {
 		}
 
 		diskInfos = append(diskInfos, models.DiskInfo{
-			Device:      partition.Device,
-			Mountpoint:  partition.Mountpoint,
-			Fstype:      partition.Fstype,
-			Total:       usage.Total,
-			Used:        usage.Used,
-			Free:        usage.Free,
-			UsedPercent: usage.UsedPercent,
+			Device:            partition.Device,
+			Mountpoint:        partition.Mountpoint,
+			Fstype:            partition.Fstype,
+			Total:             usage.Total,
+			Used:              usage.Used,
+			Free:              usage.Free,
+			UsedPercent:       usage.UsedPercent,
+			InodesTotal:       usage.InodesTotal,
+			InodesUsed:        usage.InodesUsed,
+			InodesFree:        usage.InodesFree,
+			InodesUsedPercent: usage.InodesUsedPercent,
 		})
 	}
 

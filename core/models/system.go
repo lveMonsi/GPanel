@@ -51,13 +51,17 @@ type SwapInfo struct {
 }
 
 type DiskInfo struct {
-	Device     string  `json:"device"`
-	Mountpoint string  `json:"mountpoint"`
-	Fstype     string  `json:"fstype"`
-	Total      uint64  `json:"total"`
-	Used       uint64  `json:"used"`
-	Free       uint64  `json:"free"`
-	UsedPercent float64 `json:"usedPercent"`
+	Device       string  `json:"device"`
+	Mountpoint   string  `json:"mountpoint"`
+	Fstype       string  `json:"fstype"`
+	Total        uint64  `json:"total"`
+	Used         uint64  `json:"used"`
+	Free         uint64  `json:"free"`
+	UsedPercent  float64 `json:"usedPercent"`
+	InodesTotal  uint64  `json:"inodesTotal"`
+	InodesUsed   uint64  `json:"inodesUsed"`
+	InodesFree   uint64  `json:"inodesFree"`
+	InodesUsedPercent float64 `json:"inodesUsedPercent"`
 }
 
 type LoadInfo struct {

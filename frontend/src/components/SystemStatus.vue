@@ -159,20 +159,41 @@
           <div class="tooltip-content">
             <template v-if="diskInfo.length > 0">
               <div v-for="disk in diskInfo" :key="disk.mountpoint" class="disk-section">
+                <!-- 基本信息单列 -->
+                <div class="tooltip-section disk-base-info">
+                  <div class="section-title">基本信息</div>
+                  <div class="info-row">
+                    <span class="info-label">挂载点</span>
+                    <span class="info-value">{{ disk.mountpoint }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">类型</span>
+                    <span class="info-value">{{ disk.fstype }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">文件系统</span>
+                    <span class="info-value">{{ disk.device }}</span>
+                  </div>
+                </div>
+                <!-- Inode 和磁盘双列 -->
                 <div class="disk-columns">
                   <div class="tooltip-section">
-                    <div class="section-title">基本信息</div>
+                    <div class="section-title">Inode</div>
                     <div class="info-row">
-                      <span class="info-label">挂载点</span>
-                      <span class="info-value">{{ disk.mountpoint }}</span>
+                      <span class="info-label">总数</span>
+                      <span class="info-value">{{ formatNumber(disk.inodesTotal) }}</span>
                     </div>
                     <div class="info-row">
-                      <span class="info-label">类型</span>
-                      <span class="info-value">{{ disk.fstype }}</span>
+                      <span class="info-label">已用</span>
+                      <span class="info-value">{{ formatNumber(disk.inodesUsed) }}</span>
                     </div>
                     <div class="info-row">
-                      <span class="info-label">文件系统</span>
-                      <span class="info-value">{{ disk.device }}</span>
+                      <span class="info-label">可用</span>
+                      <span class="info-value">{{ formatNumber(disk.inodesFree) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">使用率</span>
+                      <span class="info-value">{{ disk.inodesUsedPercent.toFixed(2) }}%</span>
                     </div>
                   </div>
                   <div class="tooltip-section">
@@ -250,6 +271,10 @@ interface DiskInfo {
   used: number
   free: number
   usedPercent: number
+  inodesTotal: number
+  inodesUsed: number
+  inodesFree: number
+  inodesUsedPercent: number
 }
 
 defineProps<{
@@ -286,6 +311,11 @@ const formatBytes = (bytes: number): string => {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+}
+
+const formatNumber = (num: number): string => {
+  if (num === 0) return '0'
+  return num.toLocaleString('zh-CN')
 }
 </script>
 
@@ -468,6 +498,10 @@ const formatBytes = (bytes: number): string => {
   gap: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--border-color);
+}
+
+.disk-base-info {
+  width: 100%;
 }
 
 .disk-section:last-child {
