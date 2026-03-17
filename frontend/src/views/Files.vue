@@ -96,7 +96,7 @@
         <template v-else>
           <el-button-group>
             <el-button :icon="CopyDocument" @click="startCopyMode" :disabled="selectedFiles.length === 0">复制</el-button>
-            <el-button :icon="Scissors" @click="startCutMode" :disabled="selectedFiles.length === 0">移动</el-button>
+            <el-button :icon="Rank" @click="startCutMode" :disabled="selectedFiles.length === 0">移动</el-button>
           </el-button-group>
           <el-button-group v-if="selectedFiles.length > 0">
             <el-button :icon="Operation" @click="showCompressDialog">压缩</el-button>
@@ -340,7 +340,7 @@ import {
   ArrowDown,
   Loading,
   CopyDocument,
-  Scissors,
+  Rank,
   Check,
   Close,
 } from '@element-plus/icons-vue';
@@ -379,7 +379,6 @@ const createFileForm = ref({ name: '' });
 
 const uploadDialogVisible = ref(false);
 const uploadFileList = ref<File[]>([]);
-const uploadRef = ref();
 const uploading = ref(false);
 const overwrite = ref(false);
 
@@ -403,7 +402,7 @@ const pathSegments = computed(() => {
   const parts = path.split('/').filter(p => p);
   const segments: Array<{ name: string; url: string }> = [];
   let currentUrl = '';
-  parts.forEach((part, index) => {
+  parts.forEach((part) => {
     currentUrl += '/' + part;
     segments.push({
       name: part,
@@ -463,9 +462,9 @@ const loadDrives = async () => {
     initialLoading.value = true;
     const response = await fileApi.getDrives();
     if (response.data.code === 200) {
-      drives.value = response.data.data;
+      drives.value = response.data.data || [];
       // 判断是否为 Windows 系统
-      isWindows.value = drives.value.length > 1 || (drives.value.length === 1 && drives.value[0].match(/^[A-Z]:\\/i));
+      isWindows.value = drives.value.length > 1 || (drives.value.length === 1 && drives.value[0].match(/^[A-Z]:\\/i) !== null);
       // 设置默认路径
       currentPath.value = '/';
       loadFileList();
@@ -491,7 +490,7 @@ const loadFileList = async () => {
         const response = await fileApi.getDrives();
         if (response.data.code === 200) {
           // 将盘符转换为文件列表格式
-          fileList.value = response.data.data.map(drive => ({
+          fileList.value = (response.data.data || []).map(drive => ({
             path: toDisplayPath(drive),
             name: drive,
             size: 0,
@@ -525,7 +524,7 @@ const loadFileList = async () => {
           sortOrder: 'ascending',
         });
         if (response.data.code === 200) {
-          const items = response.data.data.items || [];
+          const items = response.data.data?.items || [];
           fileList.value = items.map(item => ({
             ...item,
             path: toDisplayPath(item.path),
@@ -550,7 +549,7 @@ const loadFileList = async () => {
       sortOrder: 'ascending',
     });
     if (response.data.code === 200) {
-      const items = response.data.data.items || [];
+      const items = response.data.data?.items || [];
       fileList.value = items.map(item => ({
         ...item,
         path: toDisplayPath(item.path),
@@ -591,27 +590,6 @@ const goBack = () => {
   } else {
     parts.pop();
     currentPath.value = '/' + parts.join('/') + '/';
-  }
-
-  loadFileList();
-};
-
-const navigateToPath = () => {
-  let path = currentPath.value.trim();
-  if (!path) {
-    currentPath.value = '/';
-    loadFileList();
-    return;
-  }
-
-  // 如果用户输入的是 Windows 原生路径，转换为显示路径
-  if (path.match(/^[A-Z]:\\/i)) {
-    path = toDisplayPath(path);
-    currentPath.value = path;
-  } else if (!path.startsWith('/')) {
-    // 如果路径不以 / 开头，添加 /
-    path = '/' + path;
-    currentPath.value = path;
   }
 
   loadFileList();
