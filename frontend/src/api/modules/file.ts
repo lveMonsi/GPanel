@@ -20,6 +20,8 @@ import type {
   FilePreviewReq,
   FilePreviewRes,
   DrivesRes,
+  RemoteDownloadReq,
+  RemoteDownloadRes,
 } from '@/api/interface/file';
 
 export const fileApi = {
@@ -120,5 +122,10 @@ export const fileApi = {
   // 预览文件
   previewFile: (data: FilePreviewReq) => {
     return request.post<ApiResponse<FilePreviewRes>>('/api/v1/files/preview', data);
+  },
+
+  // 远程下载
+  remoteDownload: (data: RemoteDownloadReq) => {
+    return request.post<ApiResponse<RemoteDownloadRes>>('/api/v1/files/remote-download', data);
   },
 };

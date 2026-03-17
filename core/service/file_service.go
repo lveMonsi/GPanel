@@ -3,7 +3,9 @@ package service
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"gpanel/dto"
@@ -588,4 +590,88 @@ func (s *FileService) PreviewFile(req dto.FilePreviewReq) (*dto.FilePreviewRes, 
 	}
 
 	return result, nil
+}
+
+// RemoteDownload 远程下载文件
+func (s *FileService) RemoteDownload(req dto.RemoteDownloadReq) (*dto.RemoteDownloadRes, error) {
+	if req.URL == "" {
+		return nil, fmt.Errorf("url is required")
+	}
+	if req.Path == "" {
+		return nil, fmt.Errorf("path is required")
+	}
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+
+	// 将相对路径转换为绝对路径
+	if !filepath.IsAbs(req.Path) {
+		absPath, err := filepath.Abs(req.Path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert path to absolute path: %v", err)
+		}
+		req.Path = absPath
+	}
+
+	// 确保目标目录存在
+	fileOp := utils.NewFileOp()
+	if !fileOp.Stat(req.Path) {
+		if err := fileOp.CreateDir(req.Path, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory: %v", err)
+		}
+	}
+
+	// 完整的目标文件路径
+	dstPath := filepath.Join(req.Path, req.Name)
+
+	// 创建进度跟踪
+	progressKey := utils.GenerateProgressKey("download")
+	progressManager := utils.GetProgressManager()
+	progressManager.CreateProgress(progressKey, "远程下载", 100)
+	progressManager.SetProgressStatus(progressKey, "running")
+	progressManager.SetProgressMessage(progressKey, "正在下载...")
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				progressManager.SetProgressStatus(progressKey, "failed")
+				progressManager.SetProgressMessage(progressKey, fmt.Sprintf("下载失败: %v", r))
+			}
+		}()
+
+		// 构建下载命令
+		var cmd *exec.Cmd
+		if runtime.GOOS == "windows" {
+			// Windows 使用 curl
+			args := []string{"-L", "-o", dstPath, req.URL}
+			if req.InsecureSkipVerify {
+				args = append([]string{"-k"}, args...)
+			}
+			cmd = exec.Command("curl", args...)
+		} else {
+			// Linux/Unix 使用 wget
+			args := []string{"-O", dstPath}
+			if req.InsecureSkipVerify {
+				args = append(args, "--no-check-certificate")
+			}
+			args = append(args, req.URL)
+			cmd = exec.Command("wget", args...)
+		}
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			progressManager.SetProgressStatus(progressKey, "failed")
+			progressManager.SetProgressMessage(progressKey, fmt.Sprintf("下载失败: %v, output: %s", err, string(output)))
+			return
+		}
+
+		progressManager.UpdateProgress(progressKey, 100)
+		progressManager.SetProgressStatus(progressKey, "completed")
+		progressManager.SetProgressMessage(progressKey, "下载完成")
+	}()
+
+	return &dto.RemoteDownloadRes{
+		Key:  progressKey,
+		Path: dstPath,
+	}, nil
 }

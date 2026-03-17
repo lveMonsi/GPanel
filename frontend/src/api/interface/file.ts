@@ -141,3 +141,15 @@ export interface FileChownReq {
 export interface DrivesRes {
   drives: string[];
 }
+
+export interface RemoteDownloadReq {
+  url: string;
+  path: string;
+  name: string;
+  insecureSkipVerify?: boolean;
+}
+
+export interface RemoteDownloadRes {
+  key: string;
+  path: string;
+}

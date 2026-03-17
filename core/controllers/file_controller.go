@@ -685,3 +685,37 @@ func (c *FileController) PreviewFile(ctx *gin.Context) {
 		"data":    result,
 	})
 }
+
+// RemoteDownload 远程下载文件
+// @Summary 远程下载文件
+// @Tags File
+// @Accept json
+// @Produce json
+// @Param request body dto.RemoteDownloadReq true "远程下载请求"
+// @Success 200 {object} dto.RemoteDownloadRes
+// @Router /api/v1/files/remote-download [post]
+func (c *FileController) RemoteDownload(ctx *gin.Context) {
+	var req dto.RemoteDownloadReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	result, err := c.fileService.RemoteDownload(req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "success",
+		"data":    result,
+	})
+}

@@ -142,6 +142,7 @@ func SetupRouter(r *gin.Engine) {
 				files.POST("/chown", middleware.Auth(), fileController.ChownFile)
 				files.GET("/progress", middleware.Auth(), fileController.GetProgress)
 				files.POST("/preview", middleware.Auth(), fileController.PreviewFile)
+				files.POST("/remote-download", middleware.Auth(), fileController.RemoteDownload)
 			}
 
 			// WebSocket 连接

@@ -160,3 +160,17 @@ type FilePreviewRes struct {
 	MimeType string `json:"mimeType"`
 	Size     int64  `json:"size"`
 }
+
+// RemoteDownloadReq 远程下载请求
+type RemoteDownloadReq struct {
+	URL                string `json:"url" binding:"required"`                // 下载地址
+	Path               string `json:"path" binding:"required"`               // 保存路径
+	Name               string `json:"name" binding:"required"`               // 文件名
+	InsecureSkipVerify bool   `json:"insecureSkipVerify"`                    // 忽略不可信证书
+}
+
+// RemoteDownloadRes 远程下载响应
+type RemoteDownloadRes struct {
+	Key  string `json:"key"`  // 进度键
+	Path string `json:"path"` // 完整保存路径
+}

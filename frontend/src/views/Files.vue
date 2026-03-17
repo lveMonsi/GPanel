@@ -76,16 +76,46 @@
           上传文件
         </el-button>
 
-        <el-button-group v-if="selectedFiles.length > 0">
-          <el-button :icon="Operation" @click="showCompressDialog">压缩</el-button>
-          <el-button :icon="Operation" @click="showChmodDialog">权限</el-button>
-          <el-button :icon="Delete" type="danger" @click="batchDelete">删除</el-button>
-        </el-button-group>
+        <el-button :icon="Download" @click="showRemoteDownloadDialog" :disabled="currentPath === '/'">
+          远程下载
+        </el-button>
+
+        <template v-if="pasteMode">
+          <el-button type="success" :icon="Check" @click="pasteFilesToCurrentDir">
+            粘贴
+            <el-badge :value="pasteFiles.length" type="primary" class="paste-badge" />
+          </el-button>
+          <el-button :icon="Close" @click="cancelPaste">
+            取消
+          </el-button>
+          <span class="paste-info">
+            ({{ pasteFileCount }} 个文件, {{ pasteDirCount }} 个文件夹)
+          </span>
+        </template>
+
+        <template v-else>
+          <el-button-group>
+            <el-button :icon="CopyDocument" @click="startCopyMode" :disabled="selectedFiles.length === 0">复制</el-button>
+            <el-button :icon="Scissors" @click="startCutMode" :disabled="selectedFiles.length === 0">移动</el-button>
+          </el-button-group>
+          <el-button-group v-if="selectedFiles.length > 0">
+            <el-button :icon="Operation" @click="showCompressDialog">压缩</el-button>
+            <el-button :icon="Operation" @click="showChmodDialog">权限</el-button>
+            <el-button :icon="Delete" type="danger" @click="batchDelete">删除</el-button>
+          </el-button-group>
+        </template>
       </div>
 
       <!-- 右侧信息 -->
       <div class="action-bar-right">
-        共 {{ fileList.length }} 项
+        <template v-if="pasteMode">
+          <el-tag type="warning" effect="plain">
+            {{ pasteMode === 'cut' ? '移动模式' : '复制模式' }} - 请导航到目标目录后点击粘贴
+          </el-tag>
+        </template>
+        <template v-else>
+          共 {{ fileList.length }} 项
+        </template>
       </div>
     </div>
 
@@ -244,6 +274,43 @@
         <el-button type="primary" @click="chmodFiles">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 远程下载对话框 -->
+    <el-dialog v-model="remoteDownloadDialogVisible" title="远程下载" width="500px" :close-on-click-modal="false">
+      <el-form :model="remoteDownloadForm" label-width="100px">
+        <el-form-item label="下载地址" required>
+          <el-input 
+            v-model="remoteDownloadForm.url" 
+            placeholder="请输入下载地址 (URL)" 
+            clearable 
+          />
+        </el-form-item>
+        <el-form-item label="保存路径" required>
+          <el-input 
+            v-model="remoteDownloadForm.path" 
+            placeholder="保存目录路径" 
+            clearable 
+          />
+        </el-form-item>
+        <el-form-item label="文件名" required>
+          <el-input 
+            v-model="remoteDownloadForm.name" 
+            placeholder="保存的文件名" 
+            clearable 
+          />
+        </el-form-item>
+        <el-form-item label="忽略证书验证">
+          <el-switch v-model="remoteDownloadForm.insecureSkipVerify" />
+          <div class="text-xs text-orange-500 mt-1">
+            ⚠️ 下载时忽略不可信证书可能导致数据泄露或篡改。请谨慎使用此选项，仅在信任下载源的情况下启用。
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="remoteDownloadDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="startRemoteDownload" :loading="remoteDownloading">开始下载</el-button>
+      </template>
+    </el-dialog>
     </template>
   </div>
 </template>
@@ -272,9 +339,13 @@ import {
   Hide,
   ArrowDown,
   Loading,
+  CopyDocument,
+  Scissors,
+  Check,
+  Close,
 } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
-import type { FileInfo } from '@/api/interface/file';
+import type { FileInfo, FileMoveReq, RemoteDownloadReq } from '@/api/interface/file';
 import FileEditor from '@/components/FileEditor.vue';
 
 const currentPath = ref('/');
@@ -285,6 +356,20 @@ const searchKeyword = ref('');
 const selectedFiles = ref<FileInfo[]>([]);
 const drives = ref<string[]>([]);
 const isWindows = ref(false);
+
+// 粘贴模式相关
+const pasteMode = ref<'cut' | 'copy' | null>(null);
+const pasteFiles = ref<FileInfo[]>([]);
+
+// 远程下载相关
+const remoteDownloadDialogVisible = ref(false);
+const remoteDownloadForm = ref({
+  url: '',
+  path: '',
+  name: '',
+  insecureSkipVerify: false,
+});
+const remoteDownloading = ref(false);
 
 const createDirDialogVisible = ref(false);
 const createDirForm = ref({ name: '' });
@@ -326,6 +411,15 @@ const pathSegments = computed(() => {
     });
   });
   return segments;
+});
+
+// 粘贴文件统计
+const pasteFileCount = computed(() => {
+  return pasteFiles.value.filter(f => !f.isDir).length;
+});
+
+const pasteDirCount = computed(() => {
+  return pasteFiles.value.filter(f => f.isDir).length;
 });
 
 // 将显示路径转换为后端路径
@@ -864,6 +958,126 @@ const handleCreate = (command: string) => {
   }
 };
 
+// 复制模式
+const startCopyMode = () => {
+  if (selectedFiles.value.length === 0) {
+    ElMessage.warning('请先选择要复制的文件');
+    return;
+  }
+  pasteMode.value = 'copy';
+  pasteFiles.value = [...selectedFiles.value];
+  selectedFiles.value = [];
+  ElMessage.success(`已选择 ${pasteFiles.value.length} 个文件进行复制，请导航到目标目录后点击粘贴`);
+};
+
+// 移动模式
+const startCutMode = () => {
+  if (selectedFiles.value.length === 0) {
+    ElMessage.warning('请先选择要移动的文件');
+    return;
+  }
+  pasteMode.value = 'cut';
+  pasteFiles.value = [...selectedFiles.value];
+  selectedFiles.value = [];
+  ElMessage.success(`已选择 ${pasteFiles.value.length} 个文件进行移动，请导航到目标目录后点击粘贴`);
+};
+
+// 取消粘贴模式
+const cancelPaste = () => {
+  pasteMode.value = null;
+  pasteFiles.value = [];
+  ElMessage.info('已取消操作');
+};
+
+// 粘贴文件
+const pasteFilesToCurrentDir = async () => {
+  if (!pasteMode.value || pasteFiles.value.length === 0) {
+    return;
+  }
+
+  if (currentPath.value === '/') {
+    ElMessage.warning('无法粘贴到根目录，请选择具体的目录');
+    return;
+  }
+
+  const dstPath = toBackendPath(currentPath.value);
+  const oldPaths = pasteFiles.value.map(f => toBackendPath(f.path));
+
+  try {
+    const moveReq: FileMoveReq = {
+      oldPaths,
+      newPath: dstPath,
+      type: pasteMode.value,
+      cover: false,
+    };
+
+    const response = await fileApi.moveFile(moveReq);
+    if (response.data.code === 200) {
+      ElMessage.success(pasteMode.value === 'cut' ? '移动成功' : '复制成功');
+      pasteMode.value = null;
+      pasteFiles.value = [];
+      loadFileList();
+    } else {
+      ElMessage.error(response.data.message);
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || (pasteMode.value === 'cut' ? '移动失败' : '复制失败'));
+  }
+};
+
+// 显示远程下载对话框
+const showRemoteDownloadDialog = () => {
+  remoteDownloadForm.value = {
+    url: '',
+    path: toBackendPath(currentPath.value),
+    name: '',
+    insecureSkipVerify: false,
+  };
+  remoteDownloadDialogVisible.value = true;
+};
+
+// 开始远程下载
+const startRemoteDownload = async () => {
+  if (!remoteDownloadForm.value.url) {
+    ElMessage.warning('请输入下载地址');
+    return;
+  }
+  if (!remoteDownloadForm.value.path) {
+    ElMessage.warning('请输入保存路径');
+    return;
+  }
+  if (!remoteDownloadForm.value.name) {
+    ElMessage.warning('请输入文件名');
+    return;
+  }
+
+  remoteDownloading.value = true;
+  try {
+    const req: RemoteDownloadReq = {
+      url: remoteDownloadForm.value.url,
+      path: remoteDownloadForm.value.path,
+      name: remoteDownloadForm.value.name,
+      insecureSkipVerify: remoteDownloadForm.value.insecureSkipVerify,
+    };
+
+    const response = await fileApi.remoteDownload(req);
+    if (response.data.code === 200) {
+      ElMessage.success('下载任务已开始');
+      remoteDownloadDialogVisible.value = false;
+      // 延迟刷新文件列表
+      setTimeout(() => {
+        loadFileList();
+      }, 2000);
+    } else {
+      ElMessage.error(response.data.message);
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '下载失败');
+  } finally {
+    remoteDownloading.value = false;
+  }
+};
+
 watch(showHidden, () => {
   loadFileList();
 });
@@ -1131,5 +1345,19 @@ onMounted(() => {
   margin-top: 16px;
   font-size: 14px;
   color: #606266;
+}
+
+.paste-info {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #909399;
+}
+
+.paste-badge {
+  margin-left: 4px;
+}
+
+.paste-badge :deep(.el-badge__content) {
+  font-size: 11px;
 }
 </style>
