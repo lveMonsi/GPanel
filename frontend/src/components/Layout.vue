@@ -40,13 +40,22 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import { DataBoard, Setting, SwitchButton, Folder, Lock, Monitor, Connection } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
 const handleLogout = () => {
-  localStorage.removeItem('token')
-  router.push('/login')
+  ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    localStorage.removeItem('token')
+    router.push('/login')
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 </script>
 
