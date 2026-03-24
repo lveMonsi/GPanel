@@ -1,13 +1,10 @@
 package service
 
 import (
-	"encoding/json"
-	"fmt"
 	"gpanel/dto"
+	"gpanel/models"
 	"gpanel/repo"
 	"gpanel/utils/encrypt"
-	"gpanel/utils"
-	"gpanel/models"
 	"time"
 )
 
@@ -31,7 +28,6 @@ type IHostService interface {
 	GetHostByID(id uint) (*dto.HostInfo, error)
 	GetHostForConnection(id uint) (*models.Host, error)
 	ListHosts(req dto.HostSearch) ([]dto.HostInfo, int64, error)
-	TestConnection(req dto.HostConnTest) error
 	MoveHosts(req dto.HostMove) error
 	ExportHosts(encrypted bool) ([]dto.HostOperate, error)
 	ImportHosts(hosts []dto.HostOperate) (int, int, error)
@@ -287,46 +283,6 @@ func (s *HostService) ListHosts(req dto.HostSearch) ([]dto.HostInfo, int64, erro
 		result = append(result, *s.convertToHostInfo(&host))
 	}
 	return result, total, nil
-}
-
-func (s *HostService) TestConnection(req dto.HostConnTest) error {
-	// 调用Agent测试连接
-	agentClient, err := utils.NewAgentClient()
-	if err != nil {
-		return fmt.Errorf("failed to create agent client: %w", err)
-	}
-
-	// 构建请求数据
-	agentReq := map[string]interface{}{
-		"addr":       req.Addr,
-		"port":       req.Port,
-		"user":       req.User,
-		"authMode":   req.AuthMode,
-		"password":   req.Password,
-		"privateKey": req.PrivateKey,
-		"passPhrase": req.PassPhrase,
-	}
-
-	// 发送请求到Agent
-	respBody, err := agentClient.Post("/api/v1/hosts/test", agentReq)
-	if err != nil {
-		return fmt.Errorf("failed to test connection: %w", err)
-	}
-
-	// 解析响应
-	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if !resp.Success {
-		return fmt.Errorf(resp.Message)
-	}
-
-	return nil
 }
 
 func (s *HostService) MoveHosts(req dto.HostMove) error {

@@ -71,6 +71,10 @@ func (tc *TerminalController) proxyWebSocket(c *gin.Context, targetURL string) {
 
 	// 构建目标 URL
 	query := c.Request.URL.Query()
+	// 添加 API Key 认证（用于 Agent 端验证）
+	if global.AgentAPIKey != "" {
+		query.Set("api_key", global.AgentAPIKey)
+	}
 	targetURLWithQuery := targetURL + "?" + query.Encode()
 
 	// 连接到 Agent 服务

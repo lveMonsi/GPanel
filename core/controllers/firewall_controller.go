@@ -34,6 +34,10 @@ type FirewallController struct {
 	agentClient *utils.AgentClient
 }
 
+func firewallError(ctx *gin.Context, status int, message string) {
+	ctx.JSON(status, gin.H{"code": status, "message": message})
+}
+
 // NewFirewallController 创建防火墙控制器
 func NewFirewallController() (*FirewallController, error) {
 	client, err := utils.NewAgentClient()
@@ -45,117 +49,117 @@ func NewFirewallController() (*FirewallController, error) {
 
 // LoadBaseInfo 加载防火墙基础信息
 func (c *FirewallController) LoadBaseInfo(ctx *gin.Context) {
-	resp, err := c.agentClient.Post("/api/v1/firewall/base", nil)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/base", nil)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // SearchRules 搜索防火墙规则
 func (c *FirewallController) SearchRules(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/search", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/search", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // OperateFirewall 操作防火墙
 func (c *FirewallController) OperateFirewall(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/operate", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/operate", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // OperatePortRule 操作端口规则
 func (c *FirewallController) OperatePortRule(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/port", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/port", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // UpdatePortRule 更新端口规则
 func (c *FirewallController) UpdatePortRule(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/update/port", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/update/port", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // OperateIPRule 操作IP规则
 func (c *FirewallController) OperateIPRule(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/ip", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/ip", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // UpdateIPRule 更新IP规则
 func (c *FirewallController) UpdateIPRule(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/update/ip", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/update/ip", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // OperateForwardRule 操作端口转发规则
 func (c *FirewallController) OperateForwardRule(ctx *gin.Context) {
 	var body interface{}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	resp, err := c.agentClient.Post("/api/v1/firewall/forward", body)
+	resp, statusCode, err := c.agentClient.RequestWithStatus(http.MethodPost, "/api/v1/firewall/forward", body)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		firewallError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ctx.Data(http.StatusOK, "application/json", resp)
+	ctx.Data(statusCode, "application/json", resp)
 }
 
 // getAgentWSBaseURL 获取 Agent WebSocket 基础 URL
@@ -191,6 +195,10 @@ func (c *FirewallController) proxyWebSocket(ctx *gin.Context, targetURL string) 
 
 	// 构建目标 URL
 	query := ctx.Request.URL.Query()
+	// 添加 API Key 认证（用于 Agent 端验证）
+	if global.AgentAPIKey != "" {
+		query.Set("api_key", global.AgentAPIKey)
+	}
 	targetURLWithQuery := targetURL + "?" + query.Encode()
 
 	// 连接到 Agent 服务

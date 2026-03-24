@@ -11,6 +11,7 @@ import type {
   HostMove,
   HostConnInfo,
 } from '@/api/interface/host'
+import type { ApiResponse } from '@/api/interface/firewall'
 
 // 主机分组 API
 export const createGroup = (data: HostGroupOperate) => {
@@ -59,7 +60,7 @@ export const listHosts = (data: HostSearch) => {
 }
 
 export const testHostConnection = (data: HostConnTest) => {
-  return http.post<{ success: boolean; message: string }>('/api/v1/hosts/test', data)
+  return http.post<ApiResponse<{ success: boolean }>>('/api/v1/hosts/test', data)
 }
 
 export const moveHosts = (data: HostMove) => {

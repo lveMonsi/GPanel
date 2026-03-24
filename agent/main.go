@@ -3,6 +3,7 @@ package main
 import (
 	"gpanel/agent/global"
 	"gpanel/agent/middleware"
+	"gpanel/agent/models"
 	"gpanel/agent/routes"
 	"log"
 	"runtime"
@@ -22,6 +23,16 @@ func main() {
 
 	// 初始化全局变量
 	global.InitGlobals()
+
+	// 初始化数据库
+	if err := global.InitDB(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer global.CloseDB()
+
+	if err := global.DB.AutoMigrate(&models.Setting{}); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
 
 	// 初始化日志
 	global.InitLogger()

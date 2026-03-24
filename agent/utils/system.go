@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"gpanel/models"
+	"gpanel/agent/models"
 	stdnet "net"
 	"runtime"
 	"time"
@@ -175,7 +175,6 @@ func getDiskInfo() ([]models.DiskInfo, error) {
 
 	var diskInfos []models.DiskInfo
 	for _, partition := range partitions {
-		// 只获取挂载点为 / 的磁盘
 		if partition.Mountpoint != "/" {
 			continue
 		}
@@ -234,26 +233,17 @@ func getNetworkInfo() (models.NetworkInfo, error) {
 	}, nil
 }
 
-type OSInfo struct {
-	OS   string
-	Arch string
-}
-
-func GetOSInfo() OSInfo {
-	return OSInfo{
+func GetOSInfo() models.OSInfo {
+	return models.OSInfo{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 	}
 }
 
-func GetArchInfo() string {
-	return runtime.GOARCH
-}
-
 func getHostAddress() string {
 	addrs, err := stdnet.InterfaceAddrs()
 	if err != nil {
-		return "未知"
+		return "unknown"
 	}
 
 	for _, addr := range addrs {
@@ -263,5 +253,5 @@ func getHostAddress() string {
 			}
 		}
 	}
-	return "未知"
+	return "unknown"
 }

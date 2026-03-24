@@ -276,7 +276,7 @@ const handleTest = async () => {
       privateKey: formData.value.privateKey,
       passPhrase: formData.value.passPhrase
     })
-    if (res.data.success) {
+    if (res.data.data?.success) {
       ElMessage.success('连接测试成功')
     } else {
       ElMessage.error(res.data.message)

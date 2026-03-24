@@ -4,12 +4,21 @@ import (
 	"fmt"
 	"gpanel/dto"
 	"gpanel/service"
+	"gpanel/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 var hostService service.IHostService
+
+func hostError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"code": status, "message": message})
+}
+
+func hostMessage(c *gin.Context, message string) {
+	c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "message": message})
+}
 
 // InitHostController 初始化主机控制器
 func InitHostController() {
@@ -29,13 +38,13 @@ func InitHostController() {
 func CreateGroup(c *gin.Context) {
 	var req dto.HostGroupOperate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	group, err := hostService.CreateGroup(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -54,23 +63,23 @@ func CreateGroup(c *gin.Context) {
 func UpdateGroup(c *gin.Context) {
 	var req dto.HostGroupOperate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 	req.ID = id
 
 	if err := hostService.UpdateGroup(req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Group updated"})
+	hostMessage(c, "Group updated")
 }
 
 // DeleteGroup 删除主机分组
@@ -83,16 +92,16 @@ func UpdateGroup(c *gin.Context) {
 func DeleteGroup(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	if err := hostService.DeleteGroup(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Group deleted"})
+	hostMessage(c, "Group deleted")
 }
 
 // GetGroupByID 获取主机分组详情
@@ -105,13 +114,13 @@ func DeleteGroup(c *gin.Context) {
 func GetGroupByID(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	group, err := hostService.GetGroupByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -142,7 +151,7 @@ func ListGroups(c *gin.Context) {
 
 	groups, total, err := hostService.ListGroups(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -161,7 +170,7 @@ func ListGroups(c *gin.Context) {
 func GetHostTree(c *gin.Context) {
 	tree, err := hostService.GetHostTree()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -181,13 +190,13 @@ func GetHostTree(c *gin.Context) {
 func CreateHost(c *gin.Context) {
 	var req dto.HostOperate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	host, err := hostService.CreateHost(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -206,23 +215,23 @@ func CreateHost(c *gin.Context) {
 func UpdateHost(c *gin.Context) {
 	var req dto.HostOperate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 	req.ID = id
 
 	if err := hostService.UpdateHost(req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Host updated"})
+	hostMessage(c, "Host updated")
 }
 
 // DeleteHost 删除主机
@@ -235,16 +244,16 @@ func UpdateHost(c *gin.Context) {
 func DeleteHost(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	if err := hostService.DeleteHost(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Host deleted"})
+	hostMessage(c, "Host deleted")
 }
 
 // GetHostByID 获取主机详情
@@ -257,13 +266,13 @@ func DeleteHost(c *gin.Context) {
 func GetHostByID(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	host, err := hostService.GetHostByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -297,7 +306,7 @@ func ListHosts(c *gin.Context) {
 
 	hosts, total, err := hostService.ListHosts(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -318,16 +327,28 @@ func ListHosts(c *gin.Context) {
 func TestHostConnection(c *gin.Context) {
 	var req dto.HostConnTest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	if err := hostService.TestConnection(req); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+	agentClient, err := utils.NewAgentClient()
+	if err != nil {
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Connection successful"})
+	resp, statusCode, err := agentClient.RequestWithStatus(http.MethodPost, "/api/v1/hosts/test", gin.H{
+		"addr":       req.Addr,
+		"port":       req.Port,
+		"user":       req.User,
+		"authMode":   req.AuthMode,
+		"password":   req.Password,
+		"privateKey": req.PrivateKey,
+		"passPhrase": req.PassPhrase,
+	})
+	if err != nil {
+		hostError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.Data(statusCode, "application/json", resp)
 }
 
 // MoveHosts 移动主机到其他分组
@@ -341,16 +362,16 @@ func TestHostConnection(c *gin.Context) {
 func MoveHosts(c *gin.Context) {
 	var req dto.HostMove
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := hostService.MoveHosts(req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Hosts moved"})
+	hostMessage(c, "Hosts moved")
 }
 
 // GetHostForTerminal 获取主机连接信息（用于终端连接）
@@ -363,13 +384,13 @@ func MoveHosts(c *gin.Context) {
 func GetHostForTerminal(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	host, err := hostService.GetHostForConnection(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -392,7 +413,7 @@ func ExportHosts(c *gin.Context) {
 
 	hosts, err := hostService.ExportHosts(encrypted)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -410,17 +431,18 @@ func ExportHosts(c *gin.Context) {
 func ImportHosts(c *gin.Context) {
 	var hosts []dto.HostOperate
 	if err := c.ShouldBindJSON(&hosts); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		hostError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	success, fail, err := hostService.ImportHosts(hosts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"code":    http.StatusOK,
 		"success": success,
 		"fail":    fail,
 		"message": fmt.Sprintf("成功导入 %d 个主机，失败 %d 个", success, fail),
@@ -438,13 +460,13 @@ func ImportHosts(c *gin.Context) {
 func GetHostForConnection(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		hostError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	host, err := hostService.GetHostForConnection(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		hostError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 

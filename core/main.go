@@ -18,6 +18,9 @@ func main() {
 	log.Printf("GPanel starting...")
 	log.Printf("Go version: %s, OS/Arch: %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
+	// 初始化环境变量配置（JWT 密钥、Agent API Key 等）
+	global.InitEnvConfig()
+
 	// 初始化数据库
 	if err := global.InitDB(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)

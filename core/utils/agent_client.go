@@ -73,11 +73,23 @@ func NewAgentClient() (*AgentClient, error) {
 
 // Request 发送请求到 Agent
 func (c *AgentClient) Request(method, path string, body interface{}) ([]byte, error) {
+	respBody, statusCode, err := c.RequestWithStatus(method, path, body)
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("agent returned error (status %d): %s", statusCode, string(respBody))
+	}
+	return respBody, nil
+}
+
+// RequestWithStatus 发送请求到 Agent 并返回状态码
+func (c *AgentClient) RequestWithStatus(method, path string, body interface{}) ([]byte, int, error) {
 	var reqBody io.Reader
 	if body != nil {
 		jsonData, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("marshal request body failed: %w", err)
+			return nil, 0, fmt.Errorf("marshal request body failed: %w", err)
 		}
 		reqBody = bytes.NewReader(jsonData)
 	}
@@ -85,29 +97,50 @@ func (c *AgentClient) Request(method, path string, body interface{}) ([]byte, er
 	url := c.baseURL + path
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("create request failed: %w", err)
+		return nil, 0, fmt.Errorf("create request failed: %w", err)
 	}
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	// 如果配置了 Agent API Key，添加认证头
+	if global.AgentAPIKey != "" {
+		req.Header.Set("X-API-Key", global.AgentAPIKey)
+	}
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("send request failed: %w", err)
+		return nil, 0, fmt.Errorf("send request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response failed: %w", err)
+		return nil, 0, fmt.Errorf("read response failed: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("agent returned error (status %d): %s", resp.StatusCode, string(respBody))
-	}
+	return respBody, resp.StatusCode, nil
+}
 
-	return respBody, nil
+// StreamRequest 发送流式请求到 Agent
+func (c *AgentClient) StreamRequest(method, path string, body io.Reader, contentType string) (*http.Response, error) {
+	url := c.baseURL + path
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %w", err)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	if global.AgentAPIKey != "" {
+		req.Header.Set("X-API-Key", global.AgentAPIKey)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request failed: %w", err)
+	}
+	return resp, nil
 }
 
 // Get 发送 GET 请求

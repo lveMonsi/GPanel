@@ -3,9 +3,31 @@ package global
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 )
+
+// 环境变量配置（非数据库配置）
+var (
+	// JWTSecret JWT 签名密钥，通过 GPANEL_JWT_SECRET 环境变量配置
+	JWTSecret []byte
+	// AgentAPIKey Agent 服务 API Key，通过 GPANEL_AGENT_API_KEY 环境变量配置
+	AgentAPIKey string
+)
+
+// InitEnvConfig 初始化环境变量配置
+func InitEnvConfig() {
+	// JWT 密钥
+	if secret := os.Getenv("GPANEL_JWT_SECRET"); secret != "" {
+		JWTSecret = []byte(secret)
+	} else {
+		JWTSecret = []byte("gpanel-secret-key-change-in-production")
+	}
+
+	// Agent API Key（需要与 Agent 端 GAGENT_API_KEY 一致）
+	AgentAPIKey = os.Getenv("GPANEL_AGENT_API_KEY")
+}
 
 type ConfigCache struct {
 	mu         sync.RWMutex

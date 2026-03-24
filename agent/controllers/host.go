@@ -4,6 +4,7 @@ import (
 	"gpanel/agent/dto"
 	"gpanel/agent/utils/ssh"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,17 @@ import (
 
 // HostController 主机控制器
 type HostController struct{}
+
+func (hc *HostController) success(c *gin.Context, data interface{}, message string) {
+	if message == "" {
+		message = "success"
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": message, "data": data})
+}
+
+func (hc *HostController) fail(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"code": status, "message": message})
+}
 
 // NewHostController 创建主机控制器
 func NewHostController() (*HostController, error) {
@@ -22,7 +34,7 @@ func NewHostController() (*HostController, error) {
 func (hc *HostController) TestConnection(c *gin.Context) {
 	var req dto.HostConnTest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "message": err.Error()})
+		hc.fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -48,10 +60,10 @@ func (hc *HostController) TestConnection(c *gin.Context) {
 	client, err := ssh.NewClient(connInfo)
 	if err != nil {
 		log.Printf("[ERROR] SSH connection test failed: %v", err)
-		c.JSON(200, gin.H{"success": false, "message": err.Error()})
+		hc.fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	defer client.Close()
 
-	c.JSON(200, gin.H{"success": true, "message": "Connection successful"})
+	hc.success(c, gin.H{"success": true}, "Connection successful")
 }

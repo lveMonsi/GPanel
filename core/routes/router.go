@@ -21,9 +21,6 @@ func SetupRouter(r *gin.Engine) {
 	// 启动 WebSocket 集线器
 	go utils.Hub.Run()
 
-	// 启动进度清理任务
-	utils.StartCleanupTask()
-
 	// 测试路由
 	r.GET("/test", func(c *gin.Context) {
 		c.String(200, "Test route works!")
@@ -36,55 +33,51 @@ func SetupRouter(r *gin.Engine) {
 
 	// 登录路由（不需要 /api 前缀）
 
-		r.GET("/login", func(c *gin.Context) {
+	r.GET("/login", func(c *gin.Context) {
 
-			// 使用 embed.FS 返回前端登录页面
+		// 使用 embed.FS 返回前端登录页面
 
-			frontendDist, err := fs.Sub(frontendFS, "web/dist")
+		frontendDist, err := fs.Sub(frontendFS, "web/dist")
 
-			if err != nil {
+		if err != nil {
 
-				c.String(500, "Failed to load frontend: %v", err)
+			c.String(500, "Failed to load frontend: %v", err)
 
-				return
+			return
 
-			}
+		}
 
-			indexFile, err := frontendDist.Open("index.html")
+		indexFile, err := frontendDist.Open("index.html")
 
-			if err != nil {
+		if err != nil {
 
-				c.String(500, "Failed to open index.html: %v", err)
+			c.String(500, "Failed to open index.html: %v", err)
 
-				return
+			return
 
-			}
+		}
 
-			defer indexFile.Close()
+		defer indexFile.Close()
 
-			
+		// 读取文件内容
 
-			// 读取文件内容
+		content, err := io.ReadAll(indexFile)
 
-			content, err := io.ReadAll(indexFile)
+		if err != nil {
 
-			if err != nil {
+			c.String(500, "Failed to read index.html: %v", err)
 
-				c.String(500, "Failed to read index.html: %v", err)
+			return
 
-				return
+		}
 
-			}
+		c.Header("Content-Type", "text/html; charset=utf-8")
 
-			
+		c.Data(200, "text/html; charset=utf-8", content)
 
-			c.Header("Content-Type", "text/html; charset=utf-8")
+	})
 
-			c.Data(200, "text/html; charset=utf-8", content)
-
-		})
-
-		r.POST("/login", controllers.Login)
+	r.POST("/login", controllers.Login)
 
 	// 设置前端静态文件服务（使用 frontend.go 中的 embed.FS 版本）
 	SetupFrontend(r)
@@ -93,11 +86,12 @@ func SetupRouter(r *gin.Engine) {
 	{
 		v1 := api.Group("/v1")
 		{
+			systemController, _ := controllers.NewSystemController()
 			v1.GET("/health", controllers.HealthCheck)
 			v1.POST("/auth/login", controllers.Login)
-			v1.GET("/system/info", middleware.Auth(), controllers.GetSystemInfo)
-			v1.GET("/system/current", middleware.Auth(), controllers.GetCurrentInfo)
-			v1.GET("/system/os", middleware.Auth(), controllers.GetOSInfo)
+			v1.GET("/system/info", middleware.Auth(), systemController.GetSystemInfo)
+			v1.GET("/system/current", middleware.Auth(), systemController.GetCurrentInfo)
+			v1.GET("/system/os", middleware.Auth(), systemController.GetOSInfo)
 			v1.GET("/config", middleware.Auth(), controllers.GetConfig)
 			v1.POST("/config", middleware.Auth(), controllers.UpdateConfig)
 			v1.GET("/config/initialized", middleware.Auth(), controllers.CheckConfigInitialized)

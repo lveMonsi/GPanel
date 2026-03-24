@@ -13,6 +13,7 @@ import (
 
 func RestartServer(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
+		"code":    http.StatusOK,
 		"message": "Server will restart in 2 seconds",
 	})
 

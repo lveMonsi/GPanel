@@ -9,12 +9,13 @@ import (
 
 // 全局配置变量（带默认值）
 var (
-	ServerMode      = "release"
-	ListenAddr      = "0.0.0.0:9998"
-	LogLevel        = "info"
-	LogFile         = "/var/log/gpanel/agent.log"
-	DataDir         = "/var/lib/gpanel"
-	AllowedOrigins  = []string{} // 允许的 WebSocket Origins，为空时允许所有
+	ServerMode     = "release"
+	ListenAddr     = "127.0.0.1:9998"
+	LogLevel       = "info"
+	LogFile        = "/var/log/gpanel/agent.log"
+	DataDir        = "/var/lib/gpanel"
+	AllowedOrigins = []string{} // 允许的 WebSocket Origins，为空时允许所有
+	APIKey         = ""         // API Key 认证密钥，为空时跳过认证
 )
 
 // InitConfig 初始化配置
@@ -36,6 +37,11 @@ func InitConfig() error {
 	if dataDir := os.Getenv("GAGENT_DATA_DIR"); dataDir != "" {
 		DataDir = dataDir
 	}
+	// 读取 API Key
+	if key := os.Getenv("GAGENT_API_KEY"); key != "" {
+		APIKey = key
+	}
+
 	// 读取允许的 Origins（逗号分隔）
 	if origins := os.Getenv("GAGENT_ALLOWED_ORIGINS"); origins != "" {
 		AllowedOrigins = strings.Split(origins, ",")
@@ -77,6 +83,11 @@ func GetLogFile() string {
 // GetAllowedOrigins 获取允许的 WebSocket Origins
 func GetAllowedOrigins() []string {
 	return AllowedOrigins
+}
+
+// GetAPIKey 获取 API Key
+func GetAPIKey() string {
+	return APIKey
 }
 
 // GetDataDir 获取数据目录

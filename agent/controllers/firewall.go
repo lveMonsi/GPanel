@@ -39,6 +39,17 @@ type FirewallController struct {
 	firewallService *service.FirewallService
 }
 
+func (c *FirewallController) success(ctx *gin.Context, data interface{}, message string) {
+	if message == "" {
+		message = "success"
+	}
+	ctx.JSON(http.StatusOK, gin.H{"code": 200, "message": message, "data": data})
+}
+
+func (c *FirewallController) fail(ctx *gin.Context, status int, err error) {
+	ctx.JSON(status, gin.H{"code": status, "message": err.Error()})
+}
+
 // NewFirewallController 创建防火墙控制器
 func NewFirewallController() (*FirewallController, error) {
 	return &FirewallController{
@@ -50,116 +61,116 @@ func NewFirewallController() (*FirewallController, error) {
 func (c *FirewallController) LoadBaseInfo(ctx *gin.Context) {
 	info, err := c.firewallService.LoadBaseInfo()
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"data": info})
+	c.success(ctx, info, "success")
 }
 
 // SearchRules 搜索防火墙规则
 func (c *FirewallController) SearchRules(ctx *gin.Context) {
 	var req dto.RuleSearch
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	result, err := c.firewallService.SearchRules(req)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"data": result})
+	c.success(ctx, result, "success")
 }
 
 // OperateFirewall 操作防火墙
 func (c *FirewallController) OperateFirewall(ctx *gin.Context) {
 	var req dto.FirewallOperation
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := c.firewallService.OperateFirewall(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "操作成功"})
+	c.success(ctx, nil, "操作成功")
 }
 
 // OperatePortRule 操作端口规则
 func (c *FirewallController) OperatePortRule(ctx *gin.Context) {
 	var req dto.PortRuleOperate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := c.firewallService.OperatePortRule(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "操作成功"})
+	c.success(ctx, nil, "操作成功")
 }
 
 // UpdatePortRule 更新端口规则
 func (c *FirewallController) UpdatePortRule(ctx *gin.Context) {
 	var req dto.PortRuleUpdate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := c.firewallService.UpdatePortRule(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	c.success(ctx, nil, "更新成功")
 }
 
 // OperateIPRule 操作IP规则
 func (c *FirewallController) OperateIPRule(ctx *gin.Context) {
 	var req dto.IPRuleOperate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := c.firewallService.OperateIPRule(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "操作成功"})
+	c.success(ctx, nil, "操作成功")
 }
 
 // UpdateIPRule 更新IP规则
 func (c *FirewallController) UpdateIPRule(ctx *gin.Context) {
 	var req dto.IPRuleUpdate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := c.firewallService.UpdateIPRule(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	c.success(ctx, nil, "更新成功")
 }
 
 // OperateForwardRule 操作端口转发规则
 func (c *FirewallController) OperateForwardRule(ctx *gin.Context) {
 	var req dto.ForwardRuleOperate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := c.firewallService.OperateForwardRule(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.fail(ctx, http.StatusInternalServerError, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "操作成功"})
+	c.success(ctx, nil, "操作成功")
 }
 
 // InstallFirewall 安装防火墙 (WebSocket)

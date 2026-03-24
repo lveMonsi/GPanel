@@ -12,6 +12,14 @@ type QuickCommandController struct {
 	quickCommandService service.IQuickCommandService
 }
 
+func quickCommandError(ctx *gin.Context, status int, message string) {
+	ctx.JSON(status, gin.H{"code": status, "message": message})
+}
+
+func quickCommandMessage(ctx *gin.Context, message string) {
+	ctx.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "message": message})
+}
+
 func NewQuickCommandController() *QuickCommandController {
 	return &QuickCommandController{
 		quickCommandService: service.NewQuickCommandService(),
@@ -23,16 +31,16 @@ func NewQuickCommandController() *QuickCommandController {
 func (c *QuickCommandController) Create(ctx *gin.Context) {
 	var req dto.QuickCommandCreate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := c.quickCommandService.Create(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+	quickCommandMessage(ctx, "success")
 }
 
 // Update 更新快速命令
@@ -40,16 +48,16 @@ func (c *QuickCommandController) Create(ctx *gin.Context) {
 func (c *QuickCommandController) Update(ctx *gin.Context) {
 	var req dto.QuickCommandUpdate
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := c.quickCommandService.Update(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+	quickCommandMessage(ctx, "success")
 }
 
 // Delete 删除快速命令
@@ -57,16 +65,16 @@ func (c *QuickCommandController) Update(ctx *gin.Context) {
 func (c *QuickCommandController) Delete(ctx *gin.Context) {
 	var req dto.QuickCommandDelete
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := c.quickCommandService.Delete(req); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+	quickCommandMessage(ctx, "success")
 }
 
 // Search 搜索快速命令
@@ -74,13 +82,13 @@ func (c *QuickCommandController) Delete(ctx *gin.Context) {
 func (c *QuickCommandController) Search(ctx *gin.Context) {
 	var req dto.QuickCommandSearch
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	result, err := c.quickCommandService.Search(req)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -92,7 +100,7 @@ func (c *QuickCommandController) Search(ctx *gin.Context) {
 func (c *QuickCommandController) GetAll(ctx *gin.Context) {
 	items, err := c.quickCommandService.GetAll()
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		quickCommandError(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 

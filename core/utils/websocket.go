@@ -6,10 +6,9 @@ import (
 	"net/http"
 	"sync"
 
-	"gpanel/dto"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
@@ -31,10 +30,10 @@ type WebSocketClient struct {
 
 // WebSocketMessage WebSocket 消息
 type WebSocketMessage struct {
-	Type    string      `json:"type"`
-	Data    interface{} `json:"data"`
-	From    string      `json:"from,omitempty"`
-	To      string      `json:"to,omitempty"`
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+	From string      `json:"from,omitempty"`
+	To   string      `json:"to,omitempty"`
 }
 
 // WebSocketHub WebSocket 集线器
@@ -110,7 +109,7 @@ func (h *WebSocketHub) Broadcast(message *WebSocketMessage) {
 func (h *WebSocketHub) SendToClient(clientID string, message *WebSocketMessage) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	if client, ok := h.clients[clientID]; ok {
 		select {
 		case client.Send <- h.encodeMessage(message):
@@ -133,7 +132,7 @@ func (h *WebSocketHub) encodeMessage(message *WebSocketMessage) []byte {
 // WritePump 写入消息到客户端
 func (c *WebSocketClient) WritePump() {
 	defer c.Conn.Close()
-	
+
 	for {
 		select {
 		case message, ok := <-c.Send:
@@ -141,7 +140,7 @@ func (c *WebSocketClient) WritePump() {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			
+
 			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("Failed to write WebSocket message: %v", err)
 				return
@@ -156,9 +155,9 @@ func (c *WebSocketClient) ReadPump() {
 		c.Hub.Unregister(c)
 		c.Conn.Close()
 	}()
-	
+
 	c.Conn.SetReadLimit(512)
-	
+
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
@@ -167,14 +166,14 @@ func (c *WebSocketClient) ReadPump() {
 			}
 			break
 		}
-		
+
 		// 处理客户端消息
 		var wsMessage WebSocketMessage
 		if err := json.Unmarshal(message, &wsMessage); err != nil {
 			log.Printf("Failed to unmarshal WebSocket message: %v", err)
 			continue
 		}
-		
+
 		// 这里可以根据消息类型处理不同的逻辑
 		// 例如：心跳检测、订阅特定频道等
 	}
@@ -190,13 +189,13 @@ func HandleWebSocket(c *gin.Context) {
 		log.Printf("Failed to upgrade to WebSocket: %v", err)
 		return
 	}
-	
+
 	// 从查询参数获取客户端 ID
 	clientID := c.Query("client_id")
 	if clientID == "" {
 		clientID = uuid.New().String()
 	}
-	
+
 	// 从 JWT 获取用户 ID（如果有）
 	userID := ""
 	if userIDValue, exists := c.Get("user_id"); exists {
@@ -204,7 +203,7 @@ func HandleWebSocket(c *gin.Context) {
 			userID = uid
 		}
 	}
-	
+
 	client := &WebSocketClient{
 		ID:     clientID,
 		Conn:   conn,
@@ -212,34 +211,10 @@ func HandleWebSocket(c *gin.Context) {
 		Hub:    Hub,
 		UserID: userID,
 	}
-	
+
 	Hub.Register(client)
-	
+
 	// 启动读写协程
 	go client.WritePump()
 	go client.ReadPump()
-}
-
-// BroadcastProgress 广播进度更新
-func BroadcastProgress(progressKey string, progress *dto.ProgressInfo) {
-	message := &WebSocketMessage{
-		Type: "progress",
-		Data: map[string]interface{}{
-			"key":     progressKey,
-			"progress": progress,
-		},
-	}
-	Hub.Broadcast(message)
-}
-
-// SendProgressToClient 发送进度更新给指定客户端
-func SendProgressToClient(clientID string, progressKey string, progress *dto.ProgressInfo) {
-	message := &WebSocketMessage{
-		Type: "progress",
-		Data: map[string]interface{}{
-			"key":     progressKey,
-			"progress": progress,
-		},
-	}
-	Hub.SendToClient(clientID, message)
 }

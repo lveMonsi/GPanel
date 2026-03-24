@@ -12,8 +12,6 @@ import (
 	"gpanel/global"
 )
 
-var jwtSecret = []byte("gpanel-secret-key-change-in-production")
-
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var tokenString string
@@ -47,7 +45,7 @@ func Auth() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return jwtSecret, nil
+			return global.JWTSecret, nil
 		})
 
 		if err != nil {

@@ -11,6 +11,14 @@ import (
 
 var sessionHistoryService service.ISessionHistoryService
 
+func sessionHistoryError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"code": status, "message": message})
+}
+
+func sessionHistoryMessage(c *gin.Context, message string) {
+	c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "message": message})
+}
+
 // InitSessionHistoryController 初始化会话历史控制器
 func InitSessionHistoryController() {
 	sessionHistoryService = service.NewSessionHistoryService()
@@ -27,13 +35,13 @@ func InitSessionHistoryController() {
 func CreateSessionHistory(c *gin.Context) {
 	var req dto.SessionHistoryCreate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	history, err := sessionHistoryService.Create(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -51,16 +59,16 @@ func CreateSessionHistory(c *gin.Context) {
 func UpdateSessionHistory(c *gin.Context) {
 	var req dto.SessionHistoryUpdate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := sessionHistoryService.Update(req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Session history updated"})
+	sessionHistoryMessage(c, "Session history updated")
 }
 
 // GetSessionHistoryByID 获取会话历史详情
@@ -73,13 +81,13 @@ func UpdateSessionHistory(c *gin.Context) {
 func GetSessionHistoryByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		sessionHistoryError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	history, err := sessionHistoryService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -100,7 +108,7 @@ func ListSessionHistories(c *gin.Context) {
 
 	histories, total, err := sessionHistoryService.List(page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -126,13 +134,13 @@ func ListSessionHistories(c *gin.Context) {
 func SearchSessionHistories(c *gin.Context) {
 	var req dto.SessionHistorySearch
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	histories, total, err := sessionHistoryService.Search(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -152,14 +160,14 @@ func SearchSessionHistories(c *gin.Context) {
 func DeleteSessionHistory(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		sessionHistoryError(c, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	if err := sessionHistoryService.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		sessionHistoryError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Session history deleted"})
+	sessionHistoryMessage(c, "Session history deleted")
 }

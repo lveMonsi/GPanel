@@ -13,6 +13,14 @@ type SettingController struct {
 	settingService service.ISettingService
 }
 
+func settingError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"code": status, "message": message})
+}
+
+func settingMessage(c *gin.Context, message string) {
+	c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "message": message})
+}
+
 func NewSettingController() *SettingController {
 	return &SettingController{
 		settingService: service.NewSettingService(),
@@ -22,12 +30,11 @@ func NewSettingController() *SettingController {
 func (sc *SettingController) GetAllSettings(c *gin.Context) {
 	settings, err := sc.settingService.GetAllSettings()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get settings",
-		})
+		settingError(c, http.StatusInternalServerError, "Failed to get settings")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
+		"code":     http.StatusOK,
 		"settings": settings,
 	})
 }
@@ -36,9 +43,7 @@ func (sc *SettingController) GetSettingByKey(c *gin.Context) {
 	key := c.Param("key")
 	setting, err := sc.settingService.GetSettingByKey(key)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Setting not found",
-		})
+		settingError(c, http.StatusNotFound, "Setting not found")
 		return
 	}
 	c.JSON(http.StatusOK, setting)
@@ -51,16 +56,12 @@ func (sc *SettingController) UpdateSetting(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
+		settingError(c, http.StatusBadRequest, "Invalid request format")
 		return
 	}
 
 	if err := sc.settingService.UpdateSetting(req.Key, req.Value); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to update setting",
-		})
+		settingError(c, http.StatusInternalServerError, "Failed to update setting")
 		return
 	}
 
@@ -69,9 +70,7 @@ func (sc *SettingController) UpdateSetting(c *gin.Context) {
 		global.ConfigCacheInstance.Set(req.Key, req.Value)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Setting updated successfully",
-	})
+	settingMessage(c, "Setting updated successfully")
 }
 
 func (sc *SettingController) CreateSetting(c *gin.Context) {
@@ -82,16 +81,12 @@ func (sc *SettingController) CreateSetting(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
+		settingError(c, http.StatusBadRequest, "Invalid request format")
 		return
 	}
 
 	if err := sc.settingService.CreateSetting(req.Key, req.Value, req.About); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to create setting",
-		})
+		settingError(c, http.StatusInternalServerError, "Failed to create setting")
 		return
 	}
 
@@ -100,37 +95,30 @@ func (sc *SettingController) CreateSetting(c *gin.Context) {
 		global.ConfigCacheInstance.Set(req.Key, req.Value)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Setting created successfully",
-	})
+	settingMessage(c, "Setting created successfully")
 }
 
 func (sc *SettingController) DeleteSetting(c *gin.Context) {
 	key := c.Param("key")
 
 	if err := sc.settingService.DeleteSetting(key); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to delete setting",
-		})
+		settingError(c, http.StatusInternalServerError, "Failed to delete setting")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Setting deleted successfully",
-	})
+	settingMessage(c, "Setting deleted successfully")
 }
 
 func (sc *SettingController) GetSystemSettings(c *gin.Context) {
 	if global.ConfigCacheInstance != nil {
 		c.JSON(http.StatusOK, gin.H{
+			"code":     http.StatusOK,
 			"settings": global.ConfigCacheInstance.GetAll(),
 		})
 	} else {
 		settings, err := sc.settingService.GetAllSettings()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to get system settings",
-			})
+			settingError(c, http.StatusInternalServerError, "Failed to get system settings")
 			return
 		}
 
@@ -141,6 +129,7 @@ func (sc *SettingController) GetSystemSettings(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
+			"code":     http.StatusOK,
 			"settings": settingMap,
 		})
 	}
@@ -150,18 +139,14 @@ func (sc *SettingController) UpdateSystemSettings(c *gin.Context) {
 	var req map[string]string
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
+		settingError(c, http.StatusBadRequest, "Invalid request format")
 		return
 	}
 
 	// 批量更新设置
 	for key, value := range req {
 		if err := sc.settingService.UpdateSetting(key, value); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to update setting: " + key,
-			})
+			settingError(c, http.StatusInternalServerError, "Failed to update setting: "+key)
 			return
 		}
 
@@ -171,9 +156,7 @@ func (sc *SettingController) UpdateSystemSettings(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "System settings updated successfully",
-	})
+	settingMessage(c, "System settings updated successfully")
 }
 
 // GetTerminalInfo 获取终端设置
@@ -181,9 +164,7 @@ func (sc *SettingController) UpdateSystemSettings(c *gin.Context) {
 func (sc *SettingController) GetTerminalInfo(c *gin.Context) {
 	info, err := sc.settingService.GetTerminalInfo()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get terminal settings",
-		})
+		settingError(c, http.StatusInternalServerError, "Failed to get terminal settings")
 		return
 	}
 
@@ -195,20 +176,14 @@ func (sc *SettingController) GetTerminalInfo(c *gin.Context) {
 func (sc *SettingController) UpdateTerminal(c *gin.Context) {
 	var req dto.TerminalUpdate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
+		settingError(c, http.StatusBadRequest, "Invalid request format")
 		return
 	}
 
 	if err := sc.settingService.UpdateTerminal(req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to update terminal settings",
-		})
+		settingError(c, http.StatusInternalServerError, "Failed to update terminal settings")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Terminal settings updated successfully",
-	})
+	settingMessage(c, "Terminal settings updated successfully")
 }

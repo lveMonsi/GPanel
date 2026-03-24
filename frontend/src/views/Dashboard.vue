@@ -331,8 +331,8 @@ const formatAlertTime = (time: Date) => {
 const fetchSystemInfo = async () => {
   try {
     const response = await axios.get('/api/v1/system/info')
-    systemInfo.value = response.data
-    currentInfo.value = response.data.currentInfo
+    systemInfo.value = response.data.data
+    currentInfo.value = response.data.data?.currentInfo
   } catch (error) {
     console.error('获取系统信息失败:', error)
   } finally {
@@ -343,7 +343,7 @@ const fetchSystemInfo = async () => {
 const fetchCurrentInfo = async () => {
   try {
     const response = await axios.get('/api/v1/system/current')
-    currentInfo.value = response.data
+    currentInfo.value = response.data.data
   } catch (error) {
     console.error('获取实时信息失败:', error)
   }

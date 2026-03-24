@@ -11,8 +11,6 @@ import (
 	"gpanel/global"
 )
 
-var jwtSecret = []byte("gpanel-secret-key-change-in-production")
-
 type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
@@ -20,6 +18,10 @@ type LoginRequest struct {
 
 type LoginResponse struct {
 	Token string `json:"token"`
+}
+
+func authError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"code": status, "message": message})
 }
 
 func hashPassword(password string) string {
@@ -30,9 +32,7 @@ func hashPassword(password string) string {
 func Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
+		authError(c, http.StatusBadRequest, "Invalid request format")
 		return
 	}
 
@@ -63,11 +63,9 @@ func Login(c *gin.Context) {
 			"config_version": configVersion,
 		})
 
-		tokenString, err := token.SignedString(jwtSecret)
+		tokenString, err := token.SignedString(global.JWTSecret)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to generate token",
-			})
+			authError(c, http.StatusInternalServerError, "Failed to generate token")
 			return
 		}
 
@@ -77,7 +75,5 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusUnauthorized, gin.H{
-		"error": "Invalid username or password",
-	})
+	authError(c, http.StatusUnauthorized, "Invalid username or password")
 }

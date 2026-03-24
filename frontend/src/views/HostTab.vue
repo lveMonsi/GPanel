@@ -470,7 +470,7 @@ const testHostConnection = async (data: HostTreeNode) => {
       passPhrase: hostData.passPhrase || ''
     };
     const res = await testConnection(testData);
-    if (res.data.success) {
+    if (res.data.data?.success) {
       ElMessage.success('连接测试成功');
     } else {
       ElMessage.error(`连接测试失败: ${res.data.message}`);

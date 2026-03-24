@@ -9,6 +9,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// SystemController 系统信息控制器（代理到Agent）
+type SystemController struct {
+	agentClient *utils.AgentClient
+}
+
+func systemError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"code": status, "message": message})
+}
+
+// NewSystemController 创建系统信息控制器
+func NewSystemController() (*SystemController, error) {
+	client, err := utils.NewAgentClient()
+	if err != nil {
+		return nil, err
+	}
+	return &SystemController{agentClient: client}, nil
+}
+
 // HealthCheck 健康检查
 func HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
@@ -17,46 +35,40 @@ func HealthCheck(c *gin.Context) {
 	})
 }
 
-// GetSystemInfo 获取系统信息
-func GetSystemInfo(c *gin.Context) {
-	info, err := utils.GetSystemInfo()
+// GetSystemInfo 获取系统信息（代理到Agent）
+func (s *SystemController) GetSystemInfo(c *gin.Context) {
+	resp, statusCode, err := s.agentClient.RequestWithStatus(http.MethodGet, "/api/v1/system/info", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		systemError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, info)
+	c.Data(statusCode, "application/json", resp)
 }
 
-// GetCurrentInfo 获取当前实时信息
-func GetCurrentInfo(c *gin.Context) {
-	cpuInfo, memInfo, swapInfo, diskInfo, loadInfo, networkInfo, err := utils.GetCurrentInfo()
+// GetCurrentInfo 获取当前实时信息（代理到Agent）
+func (s *SystemController) GetCurrentInfo(c *gin.Context) {
+	resp, statusCode, err := s.agentClient.RequestWithStatus(http.MethodGet, "/api/v1/system/current", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		systemError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"cpuInfo":     cpuInfo,
-		"memoryInfo":  memInfo,
-		"swapInfo":    swapInfo,
-		"diskInfo":    diskInfo,
-		"loadInfo":    loadInfo,
-		"networkInfo": networkInfo,
-	})
+	c.Data(statusCode, "application/json", resp)
 }
 
-// GetOSInfo 获取操作系统信息（用于前端检测）
-func GetOSInfo(c *gin.Context) {
-	info := utils.GetOSInfo()
-	c.JSON(http.StatusOK, gin.H{
-		"os":   info.OS,
-		"arch": info.Arch,
-	})
+// GetOSInfo 获取操作系统信息（代理到Agent）
+func (s *SystemController) GetOSInfo(c *gin.Context) {
+	resp, statusCode, err := s.agentClient.RequestWithStatus(http.MethodGet, "/api/v1/system/os", nil)
+	if err != nil {
+		systemError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.Data(statusCode, "application/json", resp)
 }
 
 // GetConfig 获取配置
 func GetConfig(c *gin.Context) {
 	if global.ConfigCacheInstance == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Config not initialized"})
+		systemError(c, http.StatusInternalServerError, "Config not initialized")
 		return
 	}
 
@@ -92,12 +104,12 @@ func UpdateConfig(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		systemError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if global.ConfigCacheInstance == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Config not initialized"})
+		systemError(c, http.StatusInternalServerError, "Config not initialized")
 		return
 	}
 
@@ -121,32 +133,32 @@ func UpdateConfig(c *gin.Context) {
 		global.ConfigCacheInstance.UpdateSetting("Timezone", req.Timezone)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Configuration updated"})
+	c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "message": "Configuration updated"})
 }
 
 // CheckConfigInitialized 检查配置是否已初始化
 func CheckConfigInitialized(c *gin.Context) {
 	if global.ConfigCacheInstance == nil {
-		c.JSON(http.StatusOK, gin.H{"initialized": false})
+		c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "initialized": false})
 		return
 	}
 
 	initialized := global.ConfigCacheInstance.IsInitialized()
-	c.JSON(http.StatusOK, gin.H{"initialized": initialized})
+	c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "initialized": initialized})
 }
 
 // ReloadConfig 重新加载配置
 func ReloadConfig(c *gin.Context) {
 	if global.ConfigReloaderInstance == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Config reloader not initialized"})
+		systemError(c, http.StatusInternalServerError, "Config reloader not initialized")
 		return
 	}
 
 	// 触发配置重载
 	if err := global.ConfigReloaderInstance.ReloadNow(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		systemError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Configuration reloaded"})
+	c.JSON(http.StatusOK, gin.H{"code": http.StatusOK, "message": "Configuration reloaded"})
 }
