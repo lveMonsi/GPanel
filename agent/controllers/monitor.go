@@ -14,7 +14,7 @@ type MonitorController struct {
 
 func NewMonitorController() *MonitorController {
 	return &MonitorController{
-		service: service.NewMonitorService(),
+		service: service.GetMonitorService(),
 	}
 }
 
@@ -74,4 +74,13 @@ func (c *MonitorController) UpdateSetting(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "设置已更新"})
+}
+
+func (c *MonitorController) ClearData(ctx *gin.Context) {
+	if err := c.service.ClearData(); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "监控记录已清空"})
 }

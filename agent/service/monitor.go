@@ -2,10 +2,12 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"gpanel/agent/dto"
 	"gpanel/agent/global"
 	"gpanel/agent/models"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -14,12 +16,26 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
+	"gorm.io/gorm"
+)
+
+const (
+	defaultMonitorRetentionDays   = 7
+	defaultMonitorCollectInterval = 60
+	minMonitorCollectInterval     = 10
 )
 
 type MonitorService struct {
+	mu         sync.Mutex
 	lastDiskIO map[string]disk.IOCountersStat
 	lastNetIO  map[string]net.IOCountersStat
 	lastTime   time.Time
+}
+
+var monitorServiceInstance = NewMonitorService()
+
+func GetMonitorService() *MonitorService {
+	return monitorServiceInstance
 }
 
 func NewMonitorService() *MonitorService {
@@ -28,6 +44,60 @@ func NewMonitorService() *MonitorService {
 		lastNetIO:  make(map[string]net.IOCountersStat),
 		lastTime:   time.Now(),
 	}
+}
+
+func defaultMonitorSetting() models.MonitorSetting {
+	return models.MonitorSetting{
+		ID:              1,
+		Enabled:         false,
+		RetentionDays:   defaultMonitorRetentionDays,
+		CollectInterval: defaultMonitorCollectInterval,
+	}
+}
+
+func normalizeMonitorSetting(setting *models.MonitorSetting) bool {
+	changed := false
+
+	if setting.RetentionDays <= 0 {
+		setting.RetentionDays = defaultMonitorRetentionDays
+		changed = true
+	}
+
+	if setting.CollectInterval < minMonitorCollectInterval {
+		setting.CollectInterval = defaultMonitorCollectInterval
+		changed = true
+	}
+
+	return changed
+}
+
+func (s *MonitorService) ensureSetting() (models.MonitorSetting, error) {
+	var setting models.MonitorSetting
+	err := global.DB.First(&setting, 1).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			setting = defaultMonitorSetting()
+			if createErr := global.DB.Create(&setting).Error; createErr != nil {
+				return models.MonitorSetting{}, createErr
+			}
+			return setting, nil
+		}
+		return models.MonitorSetting{}, err
+	}
+
+	if normalizeMonitorSetting(&setting) {
+		if err := global.DB.Save(&setting).Error; err != nil {
+			return models.MonitorSetting{}, err
+		}
+	}
+
+	return setting, nil
+}
+
+func (s *MonitorService) resetBaselines() {
+	s.lastDiskIO = make(map[string]disk.IOCountersStat)
+	s.lastNetIO = make(map[string]net.IOCountersStat)
+	s.lastTime = time.Now()
 }
 
 func (s *MonitorService) QueryData(req dto.MonitorQueryReq) ([]interface{}, error) {
@@ -172,6 +242,9 @@ func (s *MonitorService) getTopProcesses(limit int) ([]dto.Process, []dto.Proces
 }
 
 func (s *MonitorService) CollectData() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	now := time.Now()
 	interval := now.Sub(s.lastTime).Seconds()
 	s.lastTime = now
@@ -231,15 +304,11 @@ func (s *MonitorService) CollectData() error {
 }
 
 func (s *MonitorService) GetSetting() (*dto.MonitorSettingResp, error) {
-	var setting models.MonitorSetting
-	err := global.DB.First(&setting).Error
+	setting, err := s.ensureSetting()
 	if err != nil {
-		return &dto.MonitorSettingResp{
-			Enabled:         false,
-			RetentionDays:   7,
-			CollectInterval: 60,
-		}, nil
+		return nil, err
 	}
+
 	return &dto.MonitorSettingResp{
 		Enabled:         setting.Enabled,
 		RetentionDays:   setting.RetentionDays,
@@ -250,8 +319,10 @@ func (s *MonitorService) GetSetting() (*dto.MonitorSettingResp, error) {
 }
 
 func (s *MonitorService) UpdateSetting(req dto.MonitorSettingReq) error {
-	var setting models.MonitorSetting
-	global.DB.FirstOrCreate(&setting, models.MonitorSetting{ID: 1})
+	setting, err := s.ensureSetting()
+	if err != nil {
+		return err
+	}
 
 	if req.Enabled != nil {
 		setting.Enabled = *req.Enabled
@@ -269,7 +340,34 @@ func (s *MonitorService) UpdateSetting(req dto.MonitorSettingReq) error {
 		setting.DefaultIO = *req.DefaultIO
 	}
 
+	normalizeMonitorSetting(&setting)
+
 	return global.DB.Save(&setting).Error
+}
+
+func (s *MonitorService) ClearData() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	err := global.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("1 = 1").Delete(&models.MonitorBase{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("1 = 1").Delete(&models.MonitorIO{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("1 = 1").Delete(&models.MonitorNetwork{}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	s.resetBaselines()
+	return nil
 }
 
 func (s *MonitorService) CleanOldData(days int) error {

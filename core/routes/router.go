@@ -170,9 +170,12 @@ func SetupRouter(r *gin.Engine) {
 			monitorController, _ := controllers.NewMonitorController()
 			monitor := v1.Group("/monitor")
 			{
-				monitor.POST("/data", middleware.Auth(), monitorController.GetData)
+				monitor.GET("/io-options", middleware.Auth(), monitorController.GetIOOptions)
+				monitor.GET("/network-options", middleware.Auth(), monitorController.GetNetworkOptions)
 				monitor.GET("/setting", middleware.Auth(), monitorController.GetSetting)
 				monitor.POST("/setting", middleware.Auth(), monitorController.UpdateSetting)
+				monitor.GET("/:type", middleware.Auth(), monitorController.QueryData)
+				monitor.POST("/data", middleware.Auth(), monitorController.GetData)
 				monitor.DELETE("/data", middleware.Auth(), monitorController.ClearData)
 			}
 

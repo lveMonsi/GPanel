@@ -129,6 +129,16 @@ import axios from '@/utils/axios'
 import * as echarts from 'echarts'
 import { Refresh } from '@element-plus/icons-vue'
 
+type MonitorSetting = {
+  defaultIO?: string
+  defaultNetwork?: string
+}
+
+const monitorSettings = ref<MonitorSetting>({
+  defaultIO: 'all',
+  defaultNetwork: 'all'
+})
+
 const getTodayRange = () => [new Date(new Date().setHours(0, 0, 0, 0)), new Date()]
 
 const globalTimeRange = ref<[Date, Date]>(getTodayRange())
@@ -150,6 +160,13 @@ const ioChartRef = ref<HTMLElement>()
 const netChartRef = ref<HTMLElement>()
 
 let chartInstances: Record<string, echarts.ECharts> = {}
+
+const normalizeDevice = (value?: string) => value && value.trim() ? value : 'all'
+
+const pickDevice = (preferred: string, options: string[]) => {
+  if (preferred === 'all') return 'all'
+  return options.includes(preferred) ? preferred : 'all'
+}
 
 const timeShortcuts = [
   { text: '最近1小时', value: () => [new Date(Date.now() - 3600000), new Date()] },
@@ -210,6 +227,42 @@ const buildProcessTable = (processes: any[], type: 'cpu' | 'mem') => {
   return html
 }
 
+const renderEmptyChart = (type: string, message = '暂无监控数据') => {
+  const refMap: Record<string, HTMLElement | undefined> = {
+    load: loadChartRef.value,
+    cpu: cpuChartRef.value,
+    memory: memChartRef.value,
+    io: ioChartRef.value,
+    network: netChartRef.value
+  }
+
+  const el = refMap[type]
+  if (!el) return
+
+  if (!chartInstances[type]) {
+    chartInstances[type] = echarts.init(el)
+  }
+
+  chartInstances[type].clear()
+  chartInstances[type].setOption({
+    animation: false,
+    xAxis: { type: 'category', show: false, data: [] },
+    yAxis: { type: 'value', show: false },
+    series: [],
+    graphic: {
+      type: 'text',
+      left: 'center',
+      top: 'middle',
+      style: {
+        text: message,
+        fill: '#909399',
+        fontSize: 16,
+        fontWeight: 500
+      }
+    }
+  })
+}
+
 const renderChart = (type: string, data: any[]) => {
   const refMap: Record<string, any> = {
     load: loadChartRef.value,
@@ -224,6 +277,11 @@ const renderChart = (type: string, data: any[]) => {
 
   if (!chartInstances[type]) {
     chartInstances[type] = echarts.init(el)
+  }
+
+  if (!data.length) {
+    renderEmptyChart(type)
+    return
   }
 
   const times = data.map(d => formatTime(d.date))
@@ -372,19 +430,35 @@ const fetchChartData = async (type: string) => {
   if (!range) return
 
   try {
-    const params: any = {
+    const payload: Record<string, string> = {
+      param: type,
       startTime: range[0].toISOString(),
       endTime: range[1].toISOString()
     }
 
-    if (type === 'io') params.device = selectedDisk.value
-    if (type === 'network') params.device = selectedNetwork.value
+    if (type === 'io') payload.io = selectedDisk.value
+    if (type === 'network') payload.network = selectedNetwork.value
 
-    const res = await axios.get(`/api/v1/monitor/${type}`, { params })
-    renderChart(type, res.data.data || [])
+    const res = await axios.post('/api/v1/monitor/data', payload)
+    const chartData = Array.isArray(res.data.data?.[0]) ? res.data.data[0] : (res.data.data || [])
+    renderChart(type, chartData)
   } catch (error) {
+    renderEmptyChart(type, '数据加载失败')
     console.error(`获取${type}数据失败:`, error)
   }
+}
+
+const loadMonitorSettings = async () => {
+  const { data } = await axios.get('/api/v1/monitor/setting')
+  monitorSettings.value = {
+    defaultIO: normalizeDevice(data.data?.defaultIO),
+    defaultNetwork: normalizeDevice(data.data?.defaultNetwork)
+  }
+}
+
+const applyDeviceSelection = () => {
+  selectedDisk.value = pickDevice(normalizeDevice(monitorSettings.value.defaultIO), diskOptions.value)
+  selectedNetwork.value = pickDevice(normalizeDevice(monitorSettings.value.defaultNetwork), networkOptions.value)
 }
 
 const loadDeviceOptions = async () => {
@@ -395,19 +469,50 @@ const loadDeviceOptions = async () => {
     ])
     diskOptions.value = diskRes.data.data || []
     networkOptions.value = netRes.data.data || []
-    if (diskOptions.value.length) selectedDisk.value = diskOptions.value[0]
-    if (networkOptions.value.length) selectedNetwork.value = networkOptions.value[0]
+    applyDeviceSelection()
   } catch (error) {
+    diskOptions.value = []
+    networkOptions.value = []
+    applyDeviceSelection()
     console.error('获取设备选项失败:', error)
   }
 }
 
-onMounted(async () => {
+const loadMonitorMeta = async () => {
+  try {
+    await loadMonitorSettings()
+  } catch (error) {
+    monitorSettings.value = {
+      defaultIO: 'all',
+      defaultNetwork: 'all'
+    }
+    console.error('获取监控设置失败:', error)
+  }
+
   await loadDeviceOptions()
+}
+
+const handleMonitorSettingsUpdated = async () => {
+  await loadMonitorMeta()
+  refreshAll()
+}
+
+const handleMonitorDataCleared = async () => {
+  await loadMonitorMeta()
+  refreshAll()
+}
+
+onMounted(async () => {
+  window.addEventListener('monitor-settings-updated', handleMonitorSettingsUpdated)
+  window.addEventListener('monitor-data-cleared', handleMonitorDataCleared)
+
+  await loadMonitorMeta()
   refreshAll()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('monitor-settings-updated', handleMonitorSettingsUpdated)
+  window.removeEventListener('monitor-data-cleared', handleMonitorDataCleared)
   Object.values(chartInstances).forEach(chart => chart?.dispose())
 })
 </script>

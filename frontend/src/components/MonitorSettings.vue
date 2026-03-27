@@ -15,6 +15,20 @@
         <span class="unit">秒</span>
       </el-form-item>
 
+      <el-form-item label="默认磁盘">
+        <el-select v-model="form.defaultIO" placeholder="请选择默认磁盘" clearable @change="handleSave">
+          <el-option label="全部" value="all" />
+          <el-option v-for="disk in diskOptions" :key="disk" :label="disk" :value="disk" />
+        </el-select>
+      </el-form-item>
+
+      <el-form-item label="默认网卡">
+        <el-select v-model="form.defaultNetwork" placeholder="请选择默认网卡" clearable @change="handleSave">
+          <el-option label="全部" value="all" />
+          <el-option v-for="network in networkOptions" :key="network" :label="network" :value="network" />
+        </el-select>
+      </el-form-item>
+
       <el-form-item>
         <el-button type="danger" @click="handleClear">清空监控记录</el-button>
       </el-form-item>
@@ -30,13 +44,48 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const form = ref({
   enabled: false,
   retentionDays: 7,
-  collectInterval: 60
+  collectInterval: 60,
+  defaultIO: 'all',
+  defaultNetwork: 'all'
 })
+
+const diskOptions = ref<string[]>([])
+const networkOptions = ref<string[]>([])
+
+const normalizeDevice = (value?: string) => value && value.trim() ? value : 'all'
+
+const ensureDeviceValue = (value: string, options: string[]) => {
+  if (value === 'all') return 'all'
+  return options.includes(value) ? value : 'all'
+}
+
+const loadDeviceOptions = async () => {
+  const [diskRes, netRes] = await Promise.all([
+    axios.get('/api/v1/monitor/io-options'),
+    axios.get('/api/v1/monitor/network-options')
+  ])
+
+  diskOptions.value = diskRes.data.data || []
+  networkOptions.value = netRes.data.data || []
+
+  form.value.defaultIO = ensureDeviceValue(normalizeDevice(form.value.defaultIO), diskOptions.value)
+  form.value.defaultNetwork = ensureDeviceValue(normalizeDevice(form.value.defaultNetwork), networkOptions.value)
+}
 
 const fetchSettings = async () => {
   try {
-    const { data } = await axios.get('/api/v1/monitor/setting')
-    form.value = data.data
+    const [{ data }] = await Promise.all([
+      axios.get('/api/v1/monitor/setting'),
+      loadDeviceOptions()
+    ])
+
+    form.value = {
+      enabled: data.data?.enabled ?? false,
+      retentionDays: data.data?.retentionDays ?? 7,
+      collectInterval: data.data?.collectInterval ?? 60,
+      defaultIO: ensureDeviceValue(normalizeDevice(data.data?.defaultIO), diskOptions.value),
+      defaultNetwork: ensureDeviceValue(normalizeDevice(data.data?.defaultNetwork), networkOptions.value)
+    }
   } catch (error) {
     console.error('获取设置失败:', error)
   }
@@ -44,7 +93,15 @@ const fetchSettings = async () => {
 
 const handleSave = async () => {
   try {
-    await axios.post('/api/v1/monitor/setting', form.value)
+    const payload = {
+      ...form.value,
+      defaultIO: ensureDeviceValue(normalizeDevice(form.value.defaultIO), diskOptions.value),
+      defaultNetwork: ensureDeviceValue(normalizeDevice(form.value.defaultNetwork), networkOptions.value)
+    }
+
+    form.value = payload
+    await axios.post('/api/v1/monitor/setting', payload)
+    window.dispatchEvent(new CustomEvent('monitor-settings-updated'))
     ElMessage.success('设置已保存')
   } catch (error) {
     ElMessage.error('保存失败')
@@ -55,6 +112,7 @@ const handleClear = async () => {
   try {
     await ElMessageBox.confirm('确定要清空所有监控记录吗？', '警告', { type: 'warning' })
     await axios.delete('/api/v1/monitor/data')
+    window.dispatchEvent(new CustomEvent('monitor-data-cleared'))
     ElMessage.success('监控记录已清空')
   } catch (error) {
     if (error !== 'cancel') ElMessage.error('清空失败')

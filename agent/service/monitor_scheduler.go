@@ -1,8 +1,6 @@
 package service
 
 import (
-	"gpanel/agent/global"
-	"gpanel/agent/models"
 	"log"
 	"time"
 )
@@ -13,11 +11,15 @@ var monitorStop chan bool
 func StartMonitorScheduler() {
 	monitorStop = make(chan bool)
 	go func() {
-		service := NewMonitorService()
+		service := GetMonitorService()
 
 		for {
-			var setting models.MonitorSetting
-			global.DB.FirstOrCreate(&setting, models.MonitorSetting{ID: 1})
+			setting, err := service.ensureSetting()
+			if err != nil {
+				log.Printf("Monitor load setting error: %v", err)
+				time.Sleep(time.Minute)
+				continue
+			}
 
 			if setting.Enabled {
 				if err := service.CollectData(); err != nil {
@@ -30,8 +32,8 @@ func StartMonitorScheduler() {
 			}
 
 			interval := time.Duration(setting.CollectInterval) * time.Second
-			if interval < 10*time.Second {
-				interval = 60 * time.Second
+			if interval < minMonitorCollectInterval*time.Second {
+				interval = defaultMonitorCollectInterval * time.Second
 			}
 
 			select {
