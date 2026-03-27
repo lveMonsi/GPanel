@@ -18,20 +18,38 @@ func NewMonitorController() *MonitorController {
 	}
 }
 
-func (c *MonitorController) GetData(ctx *gin.Context) {
+func (c *MonitorController) QueryData(ctx *gin.Context) {
 	var req dto.MonitorQueryReq
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	data, err := c.service.GetData(req.StartTime, req.EndTime)
+	data, err := c.service.QueryData(req)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"data": data})
+}
+
+func (c *MonitorController) GetIOOptions(ctx *gin.Context) {
+	options, err := c.service.GetIOOptions()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"data": options})
+}
+
+func (c *MonitorController) GetNetworkOptions(ctx *gin.Context) {
+	options, err := c.service.GetNetworkOptions()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"data": options})
 }
 
 func (c *MonitorController) GetSetting(ctx *gin.Context) {
@@ -56,12 +74,4 @@ func (c *MonitorController) UpdateSetting(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "设置已更新"})
-}
-
-func (c *MonitorController) ClearData(ctx *gin.Context) {
-	if err := c.service.ClearData(); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "监控数据已清空"})
 }

@@ -2,34 +2,61 @@ package dto
 
 import "time"
 
-type MonitorDataResp struct {
-	Timestamp      time.Time `json:"timestamp"`
-	CPUPercent     float64   `json:"cpuPercent"`
-	MemTotal       uint64    `json:"memTotal"`
-	MemUsed        uint64    `json:"memUsed"`
-	MemPercent     float64   `json:"memPercent"`
-	Load1          float64   `json:"load1"`
-	Load5          float64   `json:"load5"`
-	Load15         float64   `json:"load15"`
-	DiskReadBytes  uint64    `json:"diskReadBytes"`
-	DiskWriteBytes uint64    `json:"diskWriteBytes"`
-	NetRecvBytes   uint64    `json:"netRecvBytes"`
-	NetSentBytes   uint64    `json:"netSentBytes"`
+type MonitorQueryReq struct {
+	Param     string    `json:"param" binding:"required,oneof=load cpu memory io network all"`
+	IO        string    `json:"io"`
+	Network   string    `json:"network"`
+	StartTime time.Time `json:"startTime" binding:"required"`
+	EndTime   time.Time `json:"endTime" binding:"required"`
 }
 
-type MonitorQueryReq struct {
-	StartTime time.Time `json:"startTime"`
-	EndTime   time.Time `json:"endTime"`
+type Process struct {
+	Name    string  `json:"name"`
+	Pid     int32   `json:"pid"`
+	Percent float64 `json:"percent"`
+	Memory  uint64  `json:"memory"`
+	User    string  `json:"user"`
+}
+
+type MonitorBaseData struct {
+	Date      time.Time `json:"date"`
+	CPU       float64   `json:"cpu"`
+	Memory    float64   `json:"memory"`
+	Load1     float64   `json:"load1"`
+	Load5     float64   `json:"load5"`
+	Load15    float64   `json:"load15"`
+	LoadUsage float64   `json:"loadUsage"`
+	TopCPU    []Process `json:"topCPU,omitempty"`
+	TopMem    []Process `json:"topMem,omitempty"`
+}
+
+type MonitorIOData struct {
+	Date  time.Time `json:"date"`
+	Read  uint64    `json:"read"`
+	Write uint64    `json:"write"`
+	Count uint64    `json:"count"`
+	Time  uint64    `json:"time"`
+}
+
+type MonitorNetworkData struct {
+	Date time.Time `json:"date"`
+	Up   float64   `json:"up"`
+	Down float64   `json:"down"`
 }
 
 type MonitorSettingResp struct {
-	Enabled         bool `json:"enabled"`
-	RetentionDays   int  `json:"retentionDays"`
-	CollectInterval int  `json:"collectInterval"`
+	Enabled         bool   `json:"enabled"`
+	RetentionDays   int    `json:"retentionDays"`
+	CollectInterval int    `json:"collectInterval"`
+	DefaultNetwork  string `json:"defaultNetwork"`
+	DefaultIO       string `json:"defaultIO"`
 }
 
 type MonitorSettingReq struct {
-	Enabled         *bool `json:"enabled"`
-	RetentionDays   *int  `json:"retentionDays"`
-	CollectInterval *int  `json:"collectInterval"`
+	Enabled         *bool   `json:"enabled"`
+	RetentionDays   *int    `json:"retentionDays"`
+	CollectInterval *int    `json:"collectInterval"`
+	DefaultNetwork  *string `json:"defaultNetwork"`
+	DefaultIO       *string `json:"defaultIO"`
 }
+

@@ -1,44 +1,124 @@
 <template>
   <div class="monitor-dashboard">
-    <div class="time-selector">
-      <el-radio-group v-model="timeRange" @change="handleTimeChange">
-        <el-radio-button label="1h">最近1小时</el-radio-button>
-        <el-radio-button label="6h">最近6小时</el-radio-button>
-        <el-radio-button label="24h">最近24小时</el-radio-button>
-        <el-radio-button label="7d">最近7天</el-radio-button>
-      </el-radio-group>
+    <el-card class="global-time-card">
+      <div class="time-controls">
+        <el-date-picker
+          v-model="globalTimeRange"
+          type="datetimerange"
+          range-separator="-"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          :shortcuts="timeShortcuts"
+          @change="applyGlobalTime"
+        />
+        <el-button @click="refreshAll" :icon="Refresh">刷新</el-button>
+      </div>
+    </el-card>
+
+    <el-card class="chart-card full-width">
+      <template #header>
+        <div class="card-header">
+          <span class="chart-title">平均负载</span>
+          <el-date-picker
+            v-model="loadTimeRange"
+            type="datetimerange"
+            range-separator="-"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            :shortcuts="timeShortcuts"
+            @change="() => fetchChartData('load')"
+          />
+        </div>
+      </template>
+      <div ref="loadChartRef" class="chart-container"></div>
+    </el-card>
+
+    <div class="chart-row">
+      <el-card class="chart-card">
+        <template #header>
+          <div class="card-header">
+            <span class="chart-title">CPU</span>
+            <el-date-picker
+              v-model="cpuTimeRange"
+              type="datetimerange"
+              range-separator="-"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              :shortcuts="timeShortcuts"
+              @change="() => fetchChartData('cpu')"
+            />
+          </div>
+        </template>
+        <div ref="cpuChartRef" class="chart-container"></div>
+      </el-card>
+
+      <el-card class="chart-card">
+        <template #header>
+          <div class="card-header">
+            <span class="chart-title">内存</span>
+            <el-date-picker
+              v-model="memTimeRange"
+              type="datetimerange"
+              range-separator="-"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              :shortcuts="timeShortcuts"
+              @change="() => fetchChartData('memory')"
+            />
+          </div>
+        </template>
+        <div ref="memChartRef" class="chart-container"></div>
+      </el-card>
     </div>
 
-    <div v-if="loading" class="loading">
-      <el-icon class="is-loading"><Loading /></el-icon>
-      <span>加载中...</span>
-    </div>
+    <div class="chart-row">
+      <el-card class="chart-card">
+        <template #header>
+          <div class="card-header">
+            <div class="title-with-select">
+              <span class="chart-title">磁盘 I/O：</span>
+              <el-select v-model="selectedDisk" @change="() => fetchChartData('io')" size="small">
+                <el-option label="全部" value="all" />
+                <el-option v-for="disk in diskOptions" :key="disk" :label="disk" :value="disk" />
+              </el-select>
+            </div>
+            <el-date-picker
+              v-model="ioTimeRange"
+              type="datetimerange"
+              range-separator="-"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              :shortcuts="timeShortcuts"
+              @change="() => fetchChartData('io')"
+            />
+          </div>
+        </template>
+        <div ref="ioChartRef" class="chart-container"></div>
+      </el-card>
 
-    <div v-else class="charts-grid">
-      <div class="chart-card">
-        <div class="chart-title">平均负载</div>
-        <div ref="loadChart" class="chart"></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title">CPU性能监控</div>
-        <div ref="cpuChart" class="chart"></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title">内存使用监控</div>
-        <div ref="memChart" class="chart"></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title">磁盘IO监控</div>
-        <div ref="diskChart" class="chart"></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title">网络IO监控</div>
-        <div ref="netChart" class="chart"></div>
-      </div>
+      <el-card class="chart-card">
+        <template #header>
+          <div class="card-header">
+            <div class="title-with-select">
+              <span class="chart-title">网络：</span>
+              <el-select v-model="selectedNetwork" @change="() => fetchChartData('network')" size="small">
+                <el-option label="全部" value="all" />
+                <el-option v-for="net in networkOptions" :key="net" :label="net" :value="net" />
+              </el-select>
+            </div>
+            <el-date-picker
+              v-model="netTimeRange"
+              type="datetimerange"
+              range-separator="-"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              :shortcuts="timeShortcuts"
+              @change="() => fetchChartData('network')"
+            />
+          </div>
+        </template>
+        <div ref="netChartRef" class="chart-container"></div>
+      </el-card>
     </div>
   </div>
 </template>
@@ -47,106 +127,289 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from '@/utils/axios'
 import * as echarts from 'echarts'
-import { Loading } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 
-const timeRange = ref('1h')
-const loading = ref(true)
-const loadChart = ref()
-const cpuChart = ref()
-const memChart = ref()
-const diskChart = ref()
-const netChart = ref()
+const getTodayRange = () => [new Date(new Date().setHours(0, 0, 0, 0)), new Date()]
 
-let charts: echarts.ECharts[] = []
+const globalTimeRange = ref<[Date, Date]>(getTodayRange())
+const loadTimeRange = ref<[Date, Date]>(getTodayRange())
+const cpuTimeRange = ref<[Date, Date]>(getTodayRange())
+const memTimeRange = ref<[Date, Date]>(getTodayRange())
+const ioTimeRange = ref<[Date, Date]>(getTodayRange())
+const netTimeRange = ref<[Date, Date]>(getTodayRange())
 
-const getTimeRange = () => {
-  const end = new Date()
-  const start = new Date()
-  switch (timeRange.value) {
-    case '1h': start.setHours(start.getHours() - 1); break
-    case '6h': start.setHours(start.getHours() - 6); break
-    case '24h': start.setHours(start.getHours() - 24); break
-    case '7d': start.setDate(start.getDate() - 7); break
-  }
-  return { startTime: start.toISOString(), endTime: end.toISOString() }
+const selectedDisk = ref('all')
+const selectedNetwork = ref('all')
+const diskOptions = ref<string[]>([])
+const networkOptions = ref<string[]>([])
+
+const loadChartRef = ref<HTMLElement>()
+const cpuChartRef = ref<HTMLElement>()
+const memChartRef = ref<HTMLElement>()
+const ioChartRef = ref<HTMLElement>()
+const netChartRef = ref<HTMLElement>()
+
+let chartInstances: Record<string, echarts.ECharts> = {}
+
+const timeShortcuts = [
+  { text: '最近1小时', value: () => [new Date(Date.now() - 3600000), new Date()] },
+  { text: '最近6小时', value: () => [new Date(Date.now() - 21600000), new Date()] },
+  { text: '今天', value: getTodayRange },
+  { text: '最近3天', value: () => [new Date(Date.now() - 259200000), new Date()] },
+  { text: '最近7天', value: () => [new Date(Date.now() - 604800000), new Date()] }
+]
+
+const applyGlobalTime = () => {
+  loadTimeRange.value = globalTimeRange.value
+  cpuTimeRange.value = globalTimeRange.value
+  memTimeRange.value = globalTimeRange.value
+  ioTimeRange.value = globalTimeRange.value
+  netTimeRange.value = globalTimeRange.value
+  refreshAll()
 }
 
-const fetchData = async () => {
-  loading.value = true
+const refreshAll = () => {
+  fetchChartData('load')
+  fetchChartData('cpu')
+  fetchChartData('memory')
+  fetchChartData('io')
+  fetchChartData('network')
+}
+
+const formatTime = (date: string) => {
+  const d = new Date(date)
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const formatBytes = (kb: number) => {
+  if (kb < 1024) return `${kb.toFixed(2)} KB`
+  if (kb < 1048576) return `${(kb / 1024).toFixed(2)} MB`
+  return `${(kb / 1048576).toFixed(2)} GB`
+}
+
+const buildProcessTable = (processes: any[], type: 'cpu' | 'mem') => {
+  if (!processes?.length) return ''
+  const headers = type === 'cpu'
+    ? ['PID', '用户', '进程', '占用率']
+    : ['PID', '用户', '进程', '内存', '占用率']
+
+  let html = '<div style="margin-top:10px;border-top:1px dashed #ccc;padding-top:10px">'
+  html += '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+  html += '<tr>' + headers.map(h => `<th style="padding:4px;text-align:center">${h}</th>`).join('') + '</tr>'
+
+  processes.forEach(p => {
+    html += '<tr>'
+    html += `<td style="padding:4px;text-align:center">${p.pid}</td>`
+    html += `<td style="padding:4px;text-align:center">${p.user}</td>`
+    html += `<td style="padding:4px;text-align:center">${p.name}</td>`
+    if (type === 'mem') html += `<td style="padding:4px;text-align:center">${formatBytes(p.memory)}</td>`
+    html += `<td style="padding:4px;text-align:center">${p.percent.toFixed(2)}%</td>`
+    html += '</tr>'
+  })
+  html += '</table></div>'
+  return html
+}
+
+const renderChart = (type: string, data: any[]) => {
+  const refMap: Record<string, any> = {
+    load: loadChartRef.value,
+    cpu: cpuChartRef.value,
+    memory: memChartRef.value,
+    io: ioChartRef.value,
+    network: netChartRef.value
+  }
+
+  const el = refMap[type]
+  if (!el) return
+
+  if (!chartInstances[type]) {
+    chartInstances[type] = echarts.init(el)
+  }
+
+  const times = data.map(d => formatTime(d.date))
+
+  if (type === 'load') {
+    chartInstances[type].setOption({
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
+          params.forEach((p: any) => {
+            const val = p.data?.value ?? p.data
+            html += `${p.marker} ${p.seriesName}: ${val}<br/>`
+          })
+          if (params[3]?.data?.topCPU) html += buildProcessTable(params[3].data.topCPU, 'cpu')
+          return html + '</div>'
+        }
+      },
+      legend: { data: ['1分钟', '5分钟', '15分钟', '资源使用率'] },
+      grid: { left: '10%', right: '10%', bottom: '15%' },
+      xAxis: { type: 'category', data: times },
+      yAxis: [
+        { type: 'value', name: '负载详情' },
+        { type: 'value', name: '资源使用率 (%)', position: 'right' }
+      ],
+      series: [
+        { name: '1分钟', type: 'line', data: data.map(d => d.load1?.toFixed(2) || 0) },
+        { name: '5分钟', type: 'line', data: data.map(d => d.load5?.toFixed(2) || 0) },
+        { name: '15分钟', type: 'line', data: data.map(d => d.load15?.toFixed(2) || 0) },
+        {
+          name: '资源使用率',
+          type: 'line',
+          yAxisIndex: 1,
+          data: data.map(d => ({ value: d.loadUsage?.toFixed(2) || 0, topCPU: d.topCPU }))
+        }
+      ]
+    })
+  } else if (type === 'cpu') {
+    chartInstances[type].setOption({
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
+          html += `${params[0].marker} CPU: ${params[0].data.value}%<br/>`
+          if (params[0].data.topCPU) html += buildProcessTable(params[0].data.topCPU, 'cpu')
+          return html + '</div>'
+        }
+      },
+      grid: { left: '10%', right: '5%', bottom: '15%' },
+      xAxis: { type: 'category', data: times },
+      yAxis: { type: 'value', name: 'CPU (%)', max: 100 },
+      series: [{
+        name: 'CPU',
+        type: 'line',
+        smooth: true,
+        data: data.map(d => ({ value: d.cpu?.toFixed(2) || 0, topCPU: d.topCPU }))
+      }]
+    })
+  } else if (type === 'memory') {
+    chartInstances[type].setOption({
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
+          html += `${params[0].marker} 内存: ${params[0].data.value}%<br/>`
+          if (params[0].data.topMem) html += buildProcessTable(params[0].data.topMem, 'mem')
+          return html + '</div>'
+        }
+      },
+      grid: { left: '10%', right: '5%', bottom: '15%' },
+      xAxis: { type: 'category', data: times },
+      yAxis: { type: 'value', name: '内存 (%)', max: 100 },
+      series: [{
+        name: '内存',
+        type: 'line',
+        smooth: true,
+        data: data.map(d => ({ value: d.memory?.toFixed(2) || 0, topMem: d.topMem }))
+      }]
+    })
+  } else if (type === 'io') {
+    chartInstances[type].setOption({
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
+          params.forEach((p: any) => {
+            if (p.seriesName === '读取' || p.seriesName === '写入') {
+              html += `${p.marker} ${p.seriesName}: ${formatBytes(p.data)}<br/>`
+            } else if (p.seriesName === '读写次数') {
+              html += `${p.marker} ${p.seriesName}: ${p.data} 次/s<br/>`
+            } else if (p.seriesName === '读写时间') {
+              html += `${p.marker} ${p.seriesName}: ${p.data} ms<br/>`
+            }
+          })
+          return html + '</div>'
+        }
+      },
+      legend: { data: ['读取', '写入', '读写次数', '读写时间'] },
+      grid: { left: '10%', right: '10%', bottom: '15%' },
+      xAxis: { type: 'category', data: times },
+      yAxis: [
+        { type: 'value', name: '(KB/s)' },
+        { type: 'value', position: 'right' }
+      ],
+      series: [
+        { name: '读取', type: 'line', data: data.map(d => (d.read / 1024).toFixed(2)) },
+        { name: '写入', type: 'line', data: data.map(d => (d.write / 1024).toFixed(2)) },
+        { name: '读写次数', type: 'line', yAxisIndex: 1, data: data.map(d => d.count || 0) },
+        { name: '读写时间', type: 'line', yAxisIndex: 1, data: data.map(d => d.time || 0) }
+      ]
+    })
+  } else if (type === 'network') {
+    chartInstances[type].setOption({
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
+          params.forEach((p: any) => {
+            html += `${p.marker} ${p.seriesName}: ${formatBytes(p.data)}<br/>`
+          })
+          return html + '</div>'
+        }
+      },
+      legend: { data: ['上传', '下载'] },
+      grid: { left: '10%', right: '10%', bottom: '15%' },
+      xAxis: { type: 'category', data: times },
+      yAxis: { type: 'value', name: '(KB/s)' },
+      series: [
+        { name: '上传', type: 'line', data: data.map(d => d.up?.toFixed(2) || 0) },
+        { name: '下载', type: 'line', data: data.map(d => d.down?.toFixed(2) || 0) }
+      ]
+    })
+  }
+}
+
+const fetchChartData = async (type: string) => {
+  const timeRangeMap: Record<string, any> = {
+    load: loadTimeRange.value,
+    cpu: cpuTimeRange.value,
+    memory: memTimeRange.value,
+    io: ioTimeRange.value,
+    network: netTimeRange.value
+  }
+
+  const range = timeRangeMap[type]
+  if (!range) return
+
   try {
-    const { data } = await axios.post('/api/v1/monitor/data', getTimeRange())
-    renderCharts(data.data || [])
+    const params: any = {
+      startTime: range[0].toISOString(),
+      endTime: range[1].toISOString()
+    }
+
+    if (type === 'io') params.device = selectedDisk.value
+    if (type === 'network') params.device = selectedNetwork.value
+
+    const res = await axios.get(`/api/v1/monitor/${type}`, { params })
+    renderChart(type, res.data.data || [])
   } catch (error) {
-    console.error('获取监控数据失败:', error)
-  } finally {
-    loading.value = false
+    console.error(`获取${type}数据失败:`, error)
   }
 }
 
-const renderCharts = (data: any[]) => {
-  const times = data.map(d => new Date(d.timestamp).toLocaleTimeString())
-
-  charts.forEach(c => c.dispose())
-  charts = []
-
-  charts.push(echarts.init(loadChart.value))
-  charts[0].setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['1分钟', '5分钟', '15分钟'] },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value' },
-    series: [
-      { name: '1分钟', type: 'line', data: data.map(d => d.load1) },
-      { name: '5分钟', type: 'line', data: data.map(d => d.load5) },
-      { name: '15分钟', type: 'line', data: data.map(d => d.load15) }
-    ]
-  })
-
-  charts.push(echarts.init(cpuChart.value))
-  charts[1].setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value', max: 100 },
-    series: [{ name: 'CPU使用率', type: 'line', data: data.map(d => d.cpuPercent.toFixed(2)), areaStyle: {} }]
-  })
-
-  charts.push(echarts.init(memChart.value))
-  charts[2].setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value', max: 100 },
-    series: [{ name: '内存使用率', type: 'line', data: data.map(d => d.memPercent.toFixed(2)), areaStyle: {} }]
-  })
-
-  charts.push(echarts.init(diskChart.value))
-  charts[3].setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['读取', '写入'] },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value' },
-    series: [
-      { name: '读取', type: 'line', data: data.map(d => (d.diskReadBytes / 1024 / 1024).toFixed(2)) },
-      { name: '写入', type: 'line', data: data.map(d => (d.diskWriteBytes / 1024 / 1024).toFixed(2)) }
-    ]
-  })
-
-  charts.push(echarts.init(netChart.value))
-  charts[4].setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['接收', '发送'] },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value' },
-    series: [
-      { name: '接收', type: 'line', data: data.map(d => (d.netRecvBytes / 1024 / 1024).toFixed(2)) },
-      { name: '发送', type: 'line', data: data.map(d => (d.netSentBytes / 1024 / 1024).toFixed(2)) }
-    ]
-  })
+const loadDeviceOptions = async () => {
+  try {
+    const [diskRes, netRes] = await Promise.all([
+      axios.get('/api/v1/monitor/io-options'),
+      axios.get('/api/v1/monitor/network-options')
+    ])
+    diskOptions.value = diskRes.data.data || []
+    networkOptions.value = netRes.data.data || []
+    if (diskOptions.value.length) selectedDisk.value = diskOptions.value[0]
+    if (networkOptions.value.length) selectedNetwork.value = networkOptions.value[0]
+  } catch (error) {
+    console.error('获取设备选项失败:', error)
+  }
 }
 
-const handleTimeChange = () => fetchData()
+onMounted(async () => {
+  await loadDeviceOptions()
+  refreshAll()
+})
 
-onMounted(() => fetchData())
-onUnmounted(() => charts.forEach(c => c.dispose()))
+onUnmounted(() => {
+  Object.values(chartInstances).forEach(chart => chart?.dispose())
+})
 </script>
 
 <style scoped>
@@ -156,49 +419,67 @@ onUnmounted(() => charts.forEach(c => c.dispose()))
   gap: 1rem;
 }
 
-.time-selector {
-  display: flex;
-  justify-content: center;
-  padding: 1rem 0;
+.global-time-card {
+  --el-card-padding: 12px;
 }
 
-.loading {
+.time-controls {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 3rem;
-  color: var(--text-secondary);
+  gap: 1rem;
 }
 
-.charts-grid {
+.chart-card {
+  overflow: visible;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.chart-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
 }
 
-.chart-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 1rem;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.title-with-select {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .chart-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 0.75rem;
+  font-size: 16px;
+  font-weight: 500;
 }
 
-.chart {
+.chart-container {
   width: 100%;
-  height: 300px;
+  height: 400px;
 }
 
 @media (max-width: 1024px) {
-  .charts-grid {
+  .chart-row {
     grid-template-columns: 1fr;
+  }
+
+  .time-controls {
+    flex-direction: column;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>
