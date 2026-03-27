@@ -90,6 +90,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Terminal.vue')
       }
     ]
+  },
+  {
+    path: '/monitor',
+    name: 'Monitor',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'MonitorMain',
+        component: () => import('@/views/Monitor.vue')
+      }
+    ]
   }
 ]
 

@@ -95,6 +95,16 @@ func SetupRouter(r *gin.Engine) {
 				settings.GET("/ssh/conn", settingController.GetLocalConn)
 				settings.POST("/ssh/check", settingController.TestLocalConn)
 			}
+
+			// 监控路由
+			monitorController := controllers.NewMonitorController()
+			monitor := v1.Group("/monitor")
+			{
+				monitor.POST("/data", monitorController.GetData)
+				monitor.GET("/setting", monitorController.GetSetting)
+				monitor.POST("/setting", monitorController.UpdateSetting)
+				monitor.DELETE("/data", monitorController.ClearData)
+			}
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"gpanel/agent/middleware"
 	"gpanel/agent/models"
 	"gpanel/agent/routes"
+	"gpanel/agent/service"
 	"log"
 	"runtime"
 
@@ -30,12 +31,16 @@ func main() {
 	}
 	defer global.CloseDB()
 
-	if err := global.DB.AutoMigrate(&models.Setting{}); err != nil {
+	if err := global.DB.AutoMigrate(&models.Setting{}, &models.MonitorData{}, &models.MonitorSetting{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	// 初始化日志
 	global.InitLogger()
+
+	// 启动监控调度器
+	service.StartMonitorScheduler()
+	defer service.StopMonitorScheduler()
 
 	// 获取服务器配置
 	serverMode := global.GetServerMode()
