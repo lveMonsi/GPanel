@@ -22,6 +22,10 @@
           <el-icon class="nav-icon"><Monitor /></el-icon>
           <span class="nav-text">终端</span>
         </router-link>
+        <router-link to="/monitor" class="nav-item" active-class="active">
+          <el-icon class="nav-icon"><Connection /></el-icon>
+          <span class="nav-text">监控</span>
+        </router-link>
         <router-link to="/settings" class="nav-item" active-class="active">
           <el-icon class="nav-icon"><Setting /></el-icon>
           <span class="nav-text">面板设置</span>
