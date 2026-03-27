@@ -166,6 +166,16 @@ func SetupRouter(r *gin.Engine) {
 				agent.GET("/firewall/uninstall", middleware.Auth(), firewallController.UninstallFirewall)
 			}
 
+			// 监控 API（代理到 Agent）
+			monitorController, _ := controllers.NewMonitorController()
+			monitor := v1.Group("/monitor")
+			{
+				monitor.POST("/data", middleware.Auth(), monitorController.GetData)
+				monitor.GET("/setting", middleware.Auth(), monitorController.GetSetting)
+				monitor.POST("/setting", middleware.Auth(), monitorController.UpdateSetting)
+				monitor.DELETE("/data", middleware.Auth(), monitorController.ClearData)
+			}
+
 			// 主机管理 API
 			controllers.InitHostController()
 			hostGroups := v1.Group("/host-groups")
