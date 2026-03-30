@@ -5,19 +5,35 @@ import (
 	"time"
 )
 
-var monitorTicker *time.Ticker
-var monitorStop chan bool
+var monitorStop chan struct{}
+var monitorReload chan struct{}
 
 func StartMonitorScheduler() {
-	monitorStop = make(chan bool)
+	monitorStop = make(chan struct{})
+	monitorReload = make(chan struct{}, 1)
 	go func() {
 		service := GetMonitorService()
+		timer := time.NewTimer(0)
+		defer timer.Stop()
 
 		for {
+			select {
+			case <-timer.C:
+			case <-monitorReload:
+			case <-monitorStop:
+				return
+			}
+
 			setting, err := service.ensureSetting()
 			if err != nil {
 				log.Printf("Monitor load setting error: %v", err)
-				time.Sleep(time.Minute)
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(time.Minute)
 				continue
 			}
 
@@ -36,13 +52,26 @@ func StartMonitorScheduler() {
 				interval = defaultMonitorCollectInterval * time.Second
 			}
 
-			select {
-			case <-time.After(interval):
-			case <-monitorStop:
-				return
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
 			}
+			timer.Reset(interval)
 		}
 	}()
+}
+
+func NotifyMonitorScheduler() {
+	if monitorReload == nil {
+		return
+	}
+
+	select {
+	case monitorReload <- struct{}{}:
+	default:
+	}
 }
 
 func StopMonitorScheduler() {

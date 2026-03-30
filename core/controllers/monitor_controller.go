@@ -3,6 +3,7 @@ package controllers
 import (
 	"gpanel/utils"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,6 +25,20 @@ func monitorError(ctx *gin.Context, status int, message string) {
 	ctx.JSON(status, gin.H{"code": status, "message": message})
 }
 
+func normalizeMonitorProxyError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	message := err.Error()
+	lowerMessage := strings.ToLower(message)
+	if strings.Contains(lowerMessage, "send request failed") || strings.Contains(lowerMessage, "connectex") || strings.Contains(lowerMessage, "refused") || strings.Contains(lowerMessage, "timeout") {
+		return "Agent 未启动或不可达，请先确认 Agent 服务正常运行"
+	}
+
+	return message
+}
+
 // NewMonitorController 创建监控控制器
 func NewMonitorController() (*MonitorController, error) {
 	client, err := utils.NewAgentClient()
@@ -36,7 +51,7 @@ func NewMonitorController() (*MonitorController, error) {
 func (c *MonitorController) proxyToAgent(ctx *gin.Context, method, path string, body interface{}) {
 	resp, statusCode, err := c.agentClient.RequestWithStatus(method, path, body)
 	if err != nil {
-		monitorError(ctx, http.StatusInternalServerError, err.Error())
+		monitorError(ctx, http.StatusInternalServerError, normalizeMonitorProxyError(err))
 		return
 	}
 

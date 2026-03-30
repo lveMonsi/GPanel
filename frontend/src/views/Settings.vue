@@ -234,6 +234,7 @@ interface Config {
   panelUser: string
   panelPassword: string
   sessionTimeout: number
+  timezone: string
   serverAddress: string
   serverPort: string
   listenAddress: string
@@ -269,6 +270,7 @@ const config = reactive<Config>({
   panelUser: 'admin',
   panelPassword: 'admin123',
   sessionTimeout: 86400,
+  timezone: 'Asia/Shanghai',
   serverAddress: '',
   serverPort: '8080',
   listenAddress: '0.0.0.0',
@@ -286,6 +288,7 @@ const fetchConfig = async () => {
     config.panelUser = data.PanelUser || 'admin'
     config.panelPassword = data.PanelPassword || 'admin123'
     config.sessionTimeout = parseInt(data.SessionTimeout) || 86400
+    config.timezone = data.Timezone || 'Asia/Shanghai'
     config.serverAddress = data.ServerAddress || ''
     config.serverPort = data.ServerPort || '8080'
     config.listenAddress = data.ListenAddress || '0.0.0.0'
@@ -345,6 +348,7 @@ const handleSave = async () => {
     const settingsData: Record<string, string> = {
       ServerPort: config.serverPort,
       SessionTimeout: String(config.sessionTimeout),  // 转换为字符串
+      Timezone: config.timezone,
       SecurityEntrance: config.securityEntrance,
       ListenAddress: config.listenAddress,
       ServerAddress: config.serverAddress,
@@ -357,6 +361,7 @@ const handleSave = async () => {
       const currentSecurityEntrance = config.securityEntrance
       settingsData.ServerPort = '8080'
       settingsData.SessionTimeout = '86400'
+      settingsData.Timezone = 'Asia/Shanghai'
       settingsData.ListenAddress = '0.0.0.0'
       settingsData.ServerAddress = ''
       settingsData.PanelUser = 'admin'

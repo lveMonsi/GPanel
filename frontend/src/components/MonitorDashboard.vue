@@ -5,15 +5,21 @@
         <el-date-picker
           v-model="globalTimeRange"
           type="datetimerange"
+          value-format="YYYY-MM-DD HH:mm:ss"
           range-separator="-"
           start-placeholder="开始时间"
           end-placeholder="结束时间"
           :shortcuts="timeShortcuts"
           @change="applyGlobalTime"
         />
-        <el-button @click="refreshAll" :icon="Refresh">刷新</el-button>
+        <div class="time-actions">
+          <span class="timezone-text">按 {{ panelTimezone }} 显示</span>
+          <el-button @click="refreshAll" :icon="Refresh">刷新</el-button>
+        </div>
       </div>
     </el-card>
+
+    <el-alert v-if="monitorNotice" :title="monitorNotice" type="warning" :closable="false" show-icon />
 
     <el-card class="chart-card full-width">
       <template #header>
@@ -22,6 +28,7 @@
           <el-date-picker
             v-model="loadTimeRange"
             type="datetimerange"
+            value-format="YYYY-MM-DD HH:mm:ss"
             range-separator="-"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
@@ -41,6 +48,7 @@
             <el-date-picker
               v-model="cpuTimeRange"
               type="datetimerange"
+              value-format="YYYY-MM-DD HH:mm:ss"
               range-separator="-"
               start-placeholder="开始时间"
               end-placeholder="结束时间"
@@ -59,6 +67,7 @@
             <el-date-picker
               v-model="memTimeRange"
               type="datetimerange"
+              value-format="YYYY-MM-DD HH:mm:ss"
               range-separator="-"
               start-placeholder="开始时间"
               end-placeholder="结束时间"
@@ -85,6 +94,7 @@
             <el-date-picker
               v-model="ioTimeRange"
               type="datetimerange"
+              value-format="YYYY-MM-DD HH:mm:ss"
               range-separator="-"
               start-placeholder="开始时间"
               end-placeholder="结束时间"
@@ -109,6 +119,7 @@
             <el-date-picker
               v-model="netTimeRange"
               type="datetimerange"
+              value-format="YYYY-MM-DD HH:mm:ss"
               range-separator="-"
               start-placeholder="开始时间"
               end-placeholder="结束时间"
@@ -129,24 +140,152 @@ import axios from '@/utils/axios'
 import * as echarts from 'echarts'
 import { Refresh } from '@element-plus/icons-vue'
 
+type TimeRange = [string, string]
+
 type MonitorSetting = {
+  enabled?: boolean
   defaultIO?: string
   defaultNetwork?: string
 }
 
+type DateParts = {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+}
+
+const defaultPanelTimezone = 'Asia/Shanghai'
+const panelTimezone = ref(defaultPanelTimezone)
+const monitorNotice = ref('')
+
 const monitorSettings = ref<MonitorSetting>({
+  enabled: false,
   defaultIO: 'all',
   defaultNetwork: 'all'
 })
 
-const getTodayRange = () => [new Date(new Date().setHours(0, 0, 0, 0)), new Date()]
+const pad2 = (value: number) => String(value).padStart(2, '0')
 
-const globalTimeRange = ref<[Date, Date]>(getTodayRange())
-const loadTimeRange = ref<[Date, Date]>(getTodayRange())
-const cpuTimeRange = ref<[Date, Date]>(getTodayRange())
-const memTimeRange = ref<[Date, Date]>(getTodayRange())
-const ioTimeRange = ref<[Date, Date]>(getTodayRange())
-const netTimeRange = ref<[Date, Date]>(getTodayRange())
+const resolveTimeZone = (value?: string) => {
+  if (!value) return defaultPanelTimezone
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date())
+    return value
+  } catch {
+    return defaultPanelTimezone
+  }
+}
+
+const getTimeZoneParts = (date: Date, timeZone: string): DateParts => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(date)
+
+  const getValue = (type: string) => Number(parts.find(part => part.type === type)?.value || 0)
+
+  return {
+    year: getValue('year'),
+    month: getValue('month'),
+    day: getValue('day'),
+    hour: getValue('hour'),
+    minute: getValue('minute'),
+    second: getValue('second')
+  }
+}
+
+const formatPanelDateTime = (date: Date, timeZone = panelTimezone.value) => {
+  const parts = getTimeZoneParts(date, timeZone)
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)} ${pad2(parts.hour)}:${pad2(parts.minute)}:${pad2(parts.second)}`
+}
+
+const formatAxisTime = (date: string, timeZone = panelTimezone.value) => {
+  const parts = getTimeZoneParts(new Date(date), timeZone)
+  return `${parts.month}/${parts.day} ${pad2(parts.hour)}:${pad2(parts.minute)}`
+}
+
+const getTimeZoneOffset = (date: Date, timeZone: string) => {
+  const parts = getTimeZoneParts(date, timeZone)
+  const utcTime = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  return utcTime - date.getTime()
+}
+
+const parseDateTimeValue = (value: string) => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (!match) return null
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+    second: Number(match[6] || 0)
+  }
+}
+
+const toUtcISOString = (value: string, timeZone = panelTimezone.value) => {
+  const parsed = parseDateTimeValue(value)
+  if (!parsed) {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+  }
+
+  const utcGuess = Date.UTC(parsed.year, parsed.month - 1, parsed.day, parsed.hour, parsed.minute, parsed.second)
+  let offset = getTimeZoneOffset(new Date(utcGuess), timeZone)
+  let timestamp = utcGuess - offset
+  const adjustedOffset = getTimeZoneOffset(new Date(timestamp), timeZone)
+  if (adjustedOffset !== offset) {
+    timestamp = utcGuess - adjustedOffset
+  }
+
+  return new Date(timestamp).toISOString()
+}
+
+const createRecentRange = (durationMs: number): TimeRange => {
+  const end = new Date()
+  return [
+    formatPanelDateTime(new Date(end.getTime() - durationMs)),
+    formatPanelDateTime(end)
+  ]
+}
+
+const getTodayRange = (): TimeRange => {
+  const now = new Date()
+  const parts = getTimeZoneParts(now, panelTimezone.value)
+  return [
+    `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)} 00:00:00`,
+    formatPanelDateTime(now)
+  ]
+}
+
+const cloneRange = (range: TimeRange): TimeRange => [range[0], range[1]]
+
+const syncAllTimeRanges = (range: TimeRange) => {
+  globalTimeRange.value = cloneRange(range)
+  loadTimeRange.value = cloneRange(range)
+  cpuTimeRange.value = cloneRange(range)
+  memTimeRange.value = cloneRange(range)
+  ioTimeRange.value = cloneRange(range)
+  netTimeRange.value = cloneRange(range)
+}
+
+const globalTimeRange = ref<TimeRange>(getTodayRange())
+const loadTimeRange = ref<TimeRange>(getTodayRange())
+const cpuTimeRange = ref<TimeRange>(getTodayRange())
+const memTimeRange = ref<TimeRange>(getTodayRange())
+const ioTimeRange = ref<TimeRange>(getTodayRange())
+const netTimeRange = ref<TimeRange>(getTodayRange())
 
 const selectedDisk = ref('all')
 const selectedNetwork = ref('all')
@@ -168,20 +307,29 @@ const pickDevice = (preferred: string, options: string[]) => {
   return options.includes(preferred) ? preferred : 'all'
 }
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
+const normalizeMonitorError = (error: unknown, fallback: string) => {
+  const message = getErrorMessage(error, fallback)
+  if (/agent|connectex|refused|timeout|send request failed/i.test(message)) {
+    return 'Agent 未启动或不可达，请先确认 Agent 服务正常运行'
+  }
+  return message
+}
+
 const timeShortcuts = [
-  { text: '最近1小时', value: () => [new Date(Date.now() - 3600000), new Date()] },
-  { text: '最近6小时', value: () => [new Date(Date.now() - 21600000), new Date()] },
+  { text: '最近1小时', value: () => createRecentRange(3600000) },
+  { text: '最近6小时', value: () => createRecentRange(21600000) },
   { text: '今天', value: getTodayRange },
-  { text: '最近3天', value: () => [new Date(Date.now() - 259200000), new Date()] },
-  { text: '最近7天', value: () => [new Date(Date.now() - 604800000), new Date()] }
+  { text: '最近3天', value: () => createRecentRange(259200000) },
+  { text: '最近7天', value: () => createRecentRange(604800000) }
 ]
 
 const applyGlobalTime = () => {
-  loadTimeRange.value = globalTimeRange.value
-  cpuTimeRange.value = globalTimeRange.value
-  memTimeRange.value = globalTimeRange.value
-  ioTimeRange.value = globalTimeRange.value
-  netTimeRange.value = globalTimeRange.value
+  syncAllTimeRanges(globalTimeRange.value)
   refreshAll()
 }
 
@@ -194,8 +342,7 @@ const refreshAll = () => {
 }
 
 const formatTime = (date: string) => {
-  const d = new Date(date)
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  return formatAxisTime(date)
 }
 
 const formatBytes = (kb: number | string) => {
@@ -420,7 +567,7 @@ const renderChart = (type: string, data: any[]) => {
 }
 
 const fetchChartData = async (type: string) => {
-  const timeRangeMap: Record<string, any> = {
+  const timeRangeMap: Record<string, TimeRange> = {
     load: loadTimeRange.value,
     cpu: cpuTimeRange.value,
     memory: memTimeRange.value,
@@ -434,8 +581,8 @@ const fetchChartData = async (type: string) => {
   try {
     const payload: Record<string, string> = {
       param: type,
-      startTime: range[0].toISOString(),
-      endTime: range[1].toISOString()
+      startTime: toUtcISOString(range[0]),
+      endTime: toUtcISOString(range[1])
     }
 
     if (type === 'io') payload.io = selectedDisk.value
@@ -443,16 +590,38 @@ const fetchChartData = async (type: string) => {
 
     const res = await axios.post('/api/v1/monitor/data', payload)
     const chartData = Array.isArray(res.data.data?.[0]) ? res.data.data[0] : (res.data.data || [])
+    if (chartData.length === 0 && monitorSettings.value.enabled === false) {
+      monitorNotice.value = '监控尚未开启，请先在设置里打开监控开关'
+      renderEmptyChart(type, monitorNotice.value)
+      return
+    }
+
+    monitorNotice.value = ''
     renderChart(type, chartData)
   } catch (error) {
-    renderEmptyChart(type, '数据加载失败')
+    const message = normalizeMonitorError(error, '数据加载失败')
+    monitorNotice.value = message
+    renderEmptyChart(type, message)
     console.error(`获取${type}数据失败:`, error)
   }
+}
+
+const loadPanelTimezone = async () => {
+  try {
+    const response = await axios.get('/api/v1/settings/system')
+    panelTimezone.value = resolveTimeZone(response.data.settings?.Timezone)
+  } catch (error) {
+    panelTimezone.value = defaultPanelTimezone
+    console.error('获取面板时区失败:', error)
+  }
+
+  syncAllTimeRanges(getTodayRange())
 }
 
 const loadMonitorSettings = async () => {
   const { data } = await axios.get('/api/v1/monitor/setting')
   monitorSettings.value = {
+    enabled: data.data?.enabled ?? false,
     defaultIO: normalizeDevice(data.data?.defaultIO),
     defaultNetwork: normalizeDevice(data.data?.defaultNetwork)
   }
@@ -481,14 +650,23 @@ const loadDeviceOptions = async () => {
 }
 
 const loadMonitorMeta = async () => {
+  await loadPanelTimezone()
+
   try {
     await loadMonitorSettings()
+    monitorNotice.value = ''
   } catch (error) {
     monitorSettings.value = {
+      enabled: false,
       defaultIO: 'all',
       defaultNetwork: 'all'
     }
+    monitorNotice.value = normalizeMonitorError(error, '监控设置加载失败')
     console.error('获取监控设置失败:', error)
+  }
+
+  if (monitorSettings.value.enabled === false && !monitorNotice.value) {
+    monitorNotice.value = '监控尚未开启，请先在设置里打开监控开关'
   }
 
   await loadDeviceOptions()
@@ -537,6 +715,18 @@ onUnmounted(() => {
   gap: 1rem;
 }
 
+.time-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.timezone-text {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .chart-card {
   overflow: visible;
 }
@@ -582,6 +772,11 @@ onUnmounted(() => {
 
   .time-controls {
     flex-direction: column;
+  }
+
+  .time-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .card-header {

@@ -54,6 +54,20 @@ const networkOptions = ref<string[]>([])
 
 const normalizeDevice = (value?: string) => value && value.trim() ? value : 'all'
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'string') return error
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
+const normalizeMonitorError = (error: unknown, fallback: string) => {
+  const message = getErrorMessage(error, fallback)
+  if (/agent|connectex|refused|timeout|send request failed/i.test(message)) {
+    return 'Agent 未启动或不可达，请先确认 Agent 服务正常运行'
+  }
+  return message
+}
+
 const ensureDeviceValue = (value: string, options: string[]) => {
   if (value === 'all') return 'all'
   return options.includes(value) ? value : 'all'
@@ -87,6 +101,7 @@ const fetchSettings = async () => {
       defaultNetwork: ensureDeviceValue(normalizeDevice(data.data?.defaultNetwork), networkOptions.value)
     }
   } catch (error) {
+    ElMessage.error(normalizeMonitorError(error, '获取设置失败'))
     console.error('获取设置失败:', error)
   }
 }
@@ -104,7 +119,7 @@ const handleSave = async () => {
     window.dispatchEvent(new CustomEvent('monitor-settings-updated'))
     ElMessage.success('设置已保存')
   } catch (error) {
-    ElMessage.error('保存失败')
+    ElMessage.error(normalizeMonitorError(error, '保存失败'))
   }
 }
 
@@ -115,7 +130,10 @@ const handleClear = async () => {
     window.dispatchEvent(new CustomEvent('monitor-data-cleared'))
     ElMessage.success('监控记录已清空')
   } catch (error) {
-    if (error !== 'cancel') ElMessage.error('清空失败')
+    const message = getErrorMessage(error, '清空失败')
+    if (message !== 'cancel' && message !== 'close') {
+      ElMessage.error(normalizeMonitorError(error, '清空失败'))
+    }
   }
 }
 

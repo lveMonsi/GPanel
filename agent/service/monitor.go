@@ -94,10 +94,25 @@ func (s *MonitorService) ensureSetting() (models.MonitorSetting, error) {
 	return setting, nil
 }
 
-func (s *MonitorService) resetBaselines() {
+func (s *MonitorService) resetBaselinesLocked() {
 	s.lastDiskIO = make(map[string]disk.IOCountersStat)
 	s.lastNetIO = make(map[string]net.IOCountersStat)
 	s.lastTime = time.Now()
+}
+
+func (s *MonitorService) resetBaselines() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.resetBaselinesLocked()
+}
+
+func counterDelta(current, last uint64) uint64 {
+	if current < last {
+		return 0
+	}
+
+	return current - last
 }
 
 func (s *MonitorService) QueryData(req dto.MonitorQueryReq) ([]interface{}, error) {
@@ -249,22 +264,39 @@ func (s *MonitorService) CollectData() error {
 	interval := now.Sub(s.lastTime).Seconds()
 	s.lastTime = now
 
-	cpuPct, _ := cpu.Percent(time.Second, false)
-	memInfo, _ := mem.VirtualMemory()
-	loadInfo, _ := load.Avg()
-	cpuCount, _ := cpu.Counts(true)
+	var cpuUsage float64
+	if cpuPct, err := cpu.Percent(time.Second, false); err == nil && len(cpuPct) > 0 {
+		cpuUsage = cpuPct[0]
+	}
+
+	var memoryUsage float64
+	if memInfo, err := mem.VirtualMemory(); err == nil && memInfo != nil {
+		memoryUsage = memInfo.UsedPercent
+	}
+
+	var load1, load5, load15 float64
+	if loadInfo, err := load.Avg(); err == nil && loadInfo != nil {
+		load1 = loadInfo.Load1
+		load5 = loadInfo.Load5
+		load15 = loadInfo.Load15
+	}
+
+	var loadUsage float64
+	if cpuCount, err := cpu.Counts(true); err == nil && cpuCount > 0 {
+		loadUsage = (load1 / float64(cpuCount)) * 100
+	}
 
 	topCPU, topMem, _ := s.getTopProcesses(5)
 	topCPUJson, _ := json.Marshal(topCPU)
 	topMemJson, _ := json.Marshal(topMem)
 
 	base := models.MonitorBase{
-		CPU:       cpuPct[0],
-		Memory:    memInfo.UsedPercent,
-		Load1:     loadInfo.Load1,
-		Load5:     loadInfo.Load5,
-		Load15:    loadInfo.Load15,
-		LoadUsage: (loadInfo.Load1 / float64(cpuCount)) * 100,
+		CPU:       cpuUsage,
+		Memory:    memoryUsage,
+		Load1:     load1,
+		Load5:     load5,
+		Load15:    load15,
+		LoadUsage: loadUsage,
 		TopCPU:    string(topCPUJson),
 		TopMem:    string(topMemJson),
 	}
@@ -272,32 +304,40 @@ func (s *MonitorService) CollectData() error {
 		return err
 	}
 
-	diskStats, _ := disk.IOCounters()
-	for name, stat := range diskStats {
-		if last, ok := s.lastDiskIO[name]; ok && interval > 0 {
-			io := models.MonitorIO{
-				Name:  name,
-				Read:  uint64(float64(stat.ReadBytes-last.ReadBytes) / interval),
-				Write: uint64(float64(stat.WriteBytes-last.WriteBytes) / interval),
-				Count: uint64(float64(stat.ReadCount+stat.WriteCount-last.ReadCount-last.WriteCount) / interval),
-				Time:  uint64(float64(stat.ReadTime+stat.WriteTime-last.ReadTime-last.WriteTime) / interval),
+	if diskStats, err := disk.IOCounters(); err == nil {
+		for name, stat := range diskStats {
+			ioData := models.MonitorIO{Name: name}
+
+			if last, ok := s.lastDiskIO[name]; ok && interval > 0 {
+				ioData.Read = uint64(float64(counterDelta(stat.ReadBytes, last.ReadBytes)) / interval)
+				ioData.Write = uint64(float64(counterDelta(stat.WriteBytes, last.WriteBytes)) / interval)
+				ioData.Count = uint64(float64(counterDelta(stat.ReadCount+stat.WriteCount, last.ReadCount+last.WriteCount)) / interval)
+				ioData.Time = uint64(float64(counterDelta(stat.ReadTime+stat.WriteTime, last.ReadTime+last.WriteTime)) / interval)
 			}
-			global.DB.Create(&io)
+
+			if err := global.DB.Create(&ioData).Error; err != nil {
+				return err
+			}
+
+			s.lastDiskIO[name] = stat
 		}
-		s.lastDiskIO[name] = stat
 	}
 
-	netStats, _ := net.IOCounters(true)
-	for _, stat := range netStats {
-		if last, ok := s.lastNetIO[stat.Name]; ok && interval > 0 {
-			netData := models.MonitorNetwork{
-				Name: stat.Name,
-				Up:   float64(stat.BytesSent-last.BytesSent) / interval / 1024,
-				Down: float64(stat.BytesRecv-last.BytesRecv) / interval / 1024,
+	if netStats, err := net.IOCounters(true); err == nil {
+		for _, stat := range netStats {
+			netData := models.MonitorNetwork{Name: stat.Name}
+
+			if last, ok := s.lastNetIO[stat.Name]; ok && interval > 0 {
+				netData.Up = float64(counterDelta(stat.BytesSent, last.BytesSent)) / interval / 1024
+				netData.Down = float64(counterDelta(stat.BytesRecv, last.BytesRecv)) / interval / 1024
 			}
-			global.DB.Create(&netData)
+
+			if err := global.DB.Create(&netData).Error; err != nil {
+				return err
+			}
+
+			s.lastNetIO[stat.Name] = stat
 		}
-		s.lastNetIO[stat.Name] = stat
 	}
 
 	return nil
@@ -323,6 +363,7 @@ func (s *MonitorService) UpdateSetting(req dto.MonitorSettingReq) error {
 	if err != nil {
 		return err
 	}
+	prevEnabled := setting.Enabled
 
 	if req.Enabled != nil {
 		setting.Enabled = *req.Enabled
@@ -342,7 +383,16 @@ func (s *MonitorService) UpdateSetting(req dto.MonitorSettingReq) error {
 
 	normalizeMonitorSetting(&setting)
 
-	return global.DB.Save(&setting).Error
+	if err := global.DB.Save(&setting).Error; err != nil {
+		return err
+	}
+
+	if prevEnabled != setting.Enabled {
+		s.resetBaselines()
+	}
+
+	NotifyMonitorScheduler()
+	return nil
 }
 
 func (s *MonitorService) ClearData() error {
@@ -366,7 +416,7 @@ func (s *MonitorService) ClearData() error {
 		return err
 	}
 
-	s.resetBaselines()
+	s.resetBaselinesLocked()
 	return nil
 }
 
