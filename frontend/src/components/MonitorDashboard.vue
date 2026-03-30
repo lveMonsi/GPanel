@@ -198,10 +198,12 @@ const formatTime = (date: string) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const formatBytes = (kb: number) => {
-  if (kb < 1024) return `${kb.toFixed(2)} KB`
-  if (kb < 1048576) return `${(kb / 1024).toFixed(2)} MB`
-  return `${(kb / 1048576).toFixed(2)} GB`
+const formatBytes = (kb: number | string) => {
+  const value = Number(kb)
+  if (!Number.isFinite(value)) return '0.00 KB'
+  if (value < 1024) return `${value.toFixed(2)} KB`
+  if (value < 1048576) return `${(value / 1024).toFixed(2)} MB`
+  return `${(value / 1048576).toFixed(2)} GB`
 }
 
 const buildProcessTable = (processes: any[], type: 'cpu' | 'mem') => {
@@ -387,8 +389,8 @@ const renderChart = (type: string, data: any[]) => {
         { type: 'value', position: 'right' }
       ],
       series: [
-        { name: '读取', type: 'line', data: data.map(d => (d.read / 1024).toFixed(2)) },
-        { name: '写入', type: 'line', data: data.map(d => (d.write / 1024).toFixed(2)) },
+        { name: '读取', type: 'line', data: data.map(d => d.read / 1024) },
+        { name: '写入', type: 'line', data: data.map(d => d.write / 1024) },
         { name: '读写次数', type: 'line', yAxisIndex: 1, data: data.map(d => d.count || 0) },
         { name: '读写时间', type: 'line', yAxisIndex: 1, data: data.map(d => d.time || 0) }
       ]
@@ -410,8 +412,8 @@ const renderChart = (type: string, data: any[]) => {
       xAxis: { type: 'category', data: times },
       yAxis: { type: 'value', name: '(KB/s)' },
       series: [
-        { name: '上传', type: 'line', data: data.map(d => d.up?.toFixed(2) || 0) },
-        { name: '下载', type: 'line', data: data.map(d => d.down?.toFixed(2) || 0) }
+        { name: '上传', type: 'line', data: data.map(d => d.up ?? 0) },
+        { name: '下载', type: 'line', data: data.map(d => d.down ?? 0) }
       ]
     })
   }
