@@ -21,7 +21,7 @@ import (
 
 const (
 	defaultMonitorRetentionDays   = 7
-	defaultMonitorCollectInterval = 60
+	defaultMonitorCollectInterval = 300
 	minMonitorCollectInterval     = 10
 )
 

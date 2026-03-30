@@ -44,7 +44,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const form = ref({
   enabled: false,
   retentionDays: 7,
-  collectInterval: 60,
+  collectInterval: 300,
   defaultIO: 'all',
   defaultNetwork: 'all'
 })
@@ -82,7 +82,7 @@ const fetchSettings = async () => {
     form.value = {
       enabled: data.data?.enabled ?? false,
       retentionDays: data.data?.retentionDays ?? 7,
-      collectInterval: data.data?.collectInterval ?? 60,
+      collectInterval: data.data?.collectInterval ?? 300,
       defaultIO: ensureDeviceValue(normalizeDevice(data.data?.defaultIO), diskOptions.value),
       defaultNetwork: ensureDeviceValue(normalizeDevice(data.data?.defaultNetwork), networkOptions.value)
     }
