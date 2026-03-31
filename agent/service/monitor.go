@@ -117,10 +117,12 @@ func counterDelta(current, last uint64) uint64 {
 
 func (s *MonitorService) QueryData(req dto.MonitorQueryReq) ([]interface{}, error) {
 	var result []interface{}
+	startTime := req.StartTime.In(time.Local)
+	endTime := req.EndTime.In(time.Local)
 
 	if req.Param == "all" || req.Param == "load" || req.Param == "cpu" || req.Param == "memory" {
 		var bases []models.MonitorBase
-		err := global.DB.Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime).
+		err := global.DB.Where("created_at BETWEEN ? AND ?", startTime, endTime).
 			Order("created_at ASC").Find(&bases).Error
 		if err != nil {
 			return nil, err
@@ -149,7 +151,7 @@ func (s *MonitorService) QueryData(req dto.MonitorQueryReq) ([]interface{}, erro
 
 	if req.Param == "all" || req.Param == "io" {
 		var ios []models.MonitorIO
-		query := global.DB.Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime)
+		query := global.DB.Where("created_at BETWEEN ? AND ?", startTime, endTime)
 		if req.IO != "" && req.IO != "all" {
 			query = query.Where("name = ?", req.IO)
 		}
@@ -173,7 +175,7 @@ func (s *MonitorService) QueryData(req dto.MonitorQueryReq) ([]interface{}, erro
 
 	if req.Param == "all" || req.Param == "network" {
 		var nets []models.MonitorNetwork
-		query := global.DB.Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime)
+		query := global.DB.Where("created_at BETWEEN ? AND ?", startTime, endTime)
 		if req.Network != "" && req.Network != "all" {
 			query = query.Where("name = ?", req.Network)
 		}
