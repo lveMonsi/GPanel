@@ -78,14 +78,16 @@ export const fileApi = {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 0,
       }
     );
   },
 
   // 下载文件
   downloadFile: (path: string) => {
-    return request.get(`/api/v1/files/download?path=${encodeURIComponent(path)}`, {
+    return request.get<Blob>(`/api/v1/files/download?path=${encodeURIComponent(path)}`, {
       responseType: 'blob',
+      timeout: 0,
     });
   },
 

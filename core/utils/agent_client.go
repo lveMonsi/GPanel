@@ -29,6 +29,20 @@ type AgentClient struct {
 	socketPath string
 }
 
+func (c *AgentClient) newStreamHTTPClient() *http.Client {
+	if c.socketPath != "" {
+		return &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+					return net.Dial("unix", c.socketPath)
+				},
+			},
+		}
+	}
+
+	return &http.Client{}
+}
+
 // NewAgentClient 创建 Agent 客户端
 func NewAgentClient() (*AgentClient, error) {
 	var client *AgentClient
@@ -136,7 +150,7 @@ func (c *AgentClient) StreamRequest(method, path string, body io.Reader, content
 	if global.AgentAPIKey != "" {
 		req.Header.Set("X-API-Key", global.AgentAPIKey)
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.newStreamHTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("send request failed: %w", err)
 	}

@@ -155,8 +155,8 @@ const downloadFile = async () => {
   if (!props.file) return;
   
   try {
-    const blob = await fileApi.downloadFile(props.file.path);
-    const url = URL.createObjectURL(blob);
+    const response = await fileApi.downloadFile(props.file.path);
+    const url = URL.createObjectURL(response.data);
     const link = document.createElement('a');
     link.href = url;
     link.download = props.file.name;
