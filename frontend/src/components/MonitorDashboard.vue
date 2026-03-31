@@ -14,7 +14,7 @@
         />
         <div class="time-actions">
           <span class="timezone-text">按 {{ panelTimezone }} 显示</span>
-          <el-button @click="refreshAll" :icon="Refresh">刷新</el-button>
+          <el-button @click="handleRefresh" :icon="Refresh">刷新</el-button>
         </div>
       </div>
     </el-card>
@@ -454,6 +454,8 @@ const renderChart = (type: string, data: any[]) => {
     return
   }
 
+  chartInstances[type].clear()
+
   const times = data.map(d => formatTime(d.date))
 
   if (type === 'load') {
@@ -648,12 +650,19 @@ const loadMonitorSettings = async () => {
   }
 }
 
-const applyDeviceSelection = () => {
-  selectedDisk.value = pickDevice(normalizeDevice(monitorSettings.value.defaultIO), diskOptions.value)
-  selectedNetwork.value = pickDevice(normalizeDevice(monitorSettings.value.defaultNetwork), networkOptions.value)
+const applyDeviceSelection = (preserveCurrent = false) => {
+  const nextDisk = preserveCurrent
+    ? normalizeDevice(selectedDisk.value)
+    : normalizeDevice(monitorSettings.value.defaultIO)
+  const nextNetwork = preserveCurrent
+    ? normalizeDevice(selectedNetwork.value)
+    : normalizeDevice(monitorSettings.value.defaultNetwork)
+
+  selectedDisk.value = pickDevice(nextDisk, diskOptions.value)
+  selectedNetwork.value = pickDevice(nextNetwork, networkOptions.value)
 }
 
-const loadDeviceOptions = async () => {
+const loadDeviceOptions = async (preserveSelection = false) => {
   try {
     const [diskRes, netRes] = await Promise.all([
       axios.get('/api/v1/monitor/io-options'),
@@ -661,13 +670,23 @@ const loadDeviceOptions = async () => {
     ])
     diskOptions.value = diskRes.data.data || []
     networkOptions.value = netRes.data.data || []
-    applyDeviceSelection()
+    applyDeviceSelection(preserveSelection)
   } catch (error) {
     diskOptions.value = []
     networkOptions.value = []
-    applyDeviceSelection()
+    applyDeviceSelection(preserveSelection)
     console.error('获取设备选项失败:', error)
   }
+}
+
+const handleRefresh = async () => {
+  syncLiveTimeRanges()
+  await loadDeviceOptions(true)
+  fetchChartData('load')
+  fetchChartData('cpu')
+  fetchChartData('memory')
+  fetchChartData('io')
+  fetchChartData('network')
 }
 
 const loadMonitorMeta = async () => {
