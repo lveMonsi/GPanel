@@ -884,6 +884,9 @@ install_binaries() {
     # 创建目录
     mkdir -p "$INSTALL_DIR"
     mkdir -p "$DATA_DIR"
+    mkdir -p "$DATA_DIR/backups"
+    mkdir -p "$DATA_DIR/ssh"
+    mkdir -p "$DATA_DIR/temp"
     mkdir -p "$LOG_DIR"
     
     local bin_dir="$TEMP_DIR/linux-${ARCH}"

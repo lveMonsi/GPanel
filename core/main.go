@@ -14,6 +14,11 @@ import (
 )
 
 func main() {
+	if err := global.InitLogger(); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer global.CloseLogger()
+
 	// 显示启动信息
 	log.Printf("GPanel starting...")
 	log.Printf("Go version: %s, OS/Arch: %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)

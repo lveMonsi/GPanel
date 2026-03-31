@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"gpanel/agent/global"
+
 	gossh "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -38,16 +40,20 @@ var (
 // getKnownHostsFile 获取已知主机文件路径
 func getKnownHostsFile() string {
 	knownHostsInit.Do(func() {
-		// 使用应用数据目录存储已知主机
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			homeDir = "/tmp"
+		knownHostsPath := global.GetKnownHostsFile()
+		sshDir := filepath.Dir(knownHostsPath)
+		if err := os.MkdirAll(sshDir, 0700); err != nil {
+			fmt.Printf("[WARNING] Failed to create SSH data directory %s: %v\n", sshDir, err)
 		}
-		gpanelDir := filepath.Join(homeDir, ".gpanel")
-		if err := os.MkdirAll(gpanelDir, 0700); err != nil {
-			fmt.Printf("[WARNING] Failed to create gpanel directory %s: %v\n", gpanelDir, err)
+		if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+			file, createErr := os.OpenFile(knownHostsPath, os.O_CREATE, 0600)
+			if createErr != nil {
+				fmt.Printf("[WARNING] Failed to create known_hosts file %s: %v\n", knownHostsPath, createErr)
+			} else {
+				_ = file.Close()
+			}
 		}
-		knownHostsFile = filepath.Join(gpanelDir, "known_hosts")
+		knownHostsFile = knownHostsPath
 	})
 	return knownHostsFile
 }
@@ -90,7 +96,7 @@ func createHostKeyCallback() gossh.HostKeyCallback {
 			fingerprint := gossh.FingerprintSHA256(key)
 			fmt.Printf("[INFO] Adding new host key for %s (SHA256: %s)\n", hostname, fingerprint)
 
-			file, ferr := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+			file, ferr := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 			if ferr != nil {
 				return fmt.Errorf("failed to open known_hosts file: %w", ferr)
 			}

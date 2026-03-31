@@ -22,6 +22,9 @@ const (
 	dataDir    = "/var/lib/gpanel"
 	logDir     = "/var/log/gpanel"
 	dbPath     = "/var/lib/gpanel/gpanel.db"
+	backupDir  = "/var/lib/gpanel/backups"
+	coreLog    = "/var/log/gpanel/gpanel.log"
+	agentLog   = "/var/log/gpanel/agent.log"
 )
 
 // 服务定义
@@ -851,7 +854,6 @@ func handleRestore() {
 	fmt.Println("正在恢复 GPanel...")
 
 	// 查找备份目录
-	backupDir := filepath.Join(dataDir, "backups")
 	if !dirExists(backupDir) {
 		fmt.Println("错误: 未找到备份目录")
 		os.Exit(1)
@@ -892,7 +894,11 @@ func handleRestore() {
 	exec.Command("systemctl", "stop", "gpanel").Run()
 
 	// 备份当前数据库
-	currentBackup := dbPath + ".backup." + time.Now().Format("20060102150405")
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		fmt.Printf("创建备份目录失败: %v\n", err)
+		os.Exit(1)
+	}
+	currentBackup := filepath.Join(backupDir, "gpanel.db.backup."+time.Now().Format("20060102150405"))
 	if fileExists(dbPath) {
 		if err := copyFile(dbPath, currentBackup); err != nil {
 			fmt.Printf("备份当前数据库失败: %v\n", err)
@@ -1001,11 +1007,11 @@ func handleLogs() {
 
 	switch subCommand {
 	case "core":
-		logFile = filepath.Join(logDir, "gpanel.log")
+		logFile = coreLog
 		serviceName = "gpanel"
 		fmt.Println("=== GPanel Core 日志 ===")
 	case "agent":
-		logFile = filepath.Join(logDir, "agent.log")
+		logFile = agentLog
 		serviceName = "gpanel-agent"
 		fmt.Println("=== GPanel Agent 日志 ===")
 	default:
@@ -1541,12 +1547,12 @@ func resetPassword() {
 // 8位长度，包含大小写字母、数字和符号
 func generateRandomPassword() string {
 	const (
-		length      = 8
-		lowercase   = "abcdefghijklmnopqrstuvwxyz"
-		uppercase   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		digits      = "0123456789"
-		symbols     = "!@#$%^&*"
-		allChars    = lowercase + uppercase + digits + symbols
+		length    = 8
+		lowercase = "abcdefghijklmnopqrstuvwxyz"
+		uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		digits    = "0123456789"
+		symbols   = "!@#$%^&*"
+		allChars  = lowercase + uppercase + digits + symbols
 	)
 
 	password := make([]byte, length)

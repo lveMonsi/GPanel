@@ -14,15 +14,8 @@ import (
 var DB *gorm.DB
 
 func InitDB() error {
-	// 设置数据库文件路径
-	var dbPath string
-	
-	// 优先使用环境变量指定的路径
-	if dbPath = os.Getenv("GPANEL_DB_PATH"); dbPath == "" {
-		// 默认使用 /var/lib/gpanel/gpanel.db
-		dbPath = "/var/lib/gpanel/gpanel.db"
-	}
-	
+	dbPath := DBPath
+
 	// 确保数据目录存在
 	dbDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {

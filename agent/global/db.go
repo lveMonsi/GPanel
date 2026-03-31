@@ -14,10 +14,7 @@ import (
 var DB *gorm.DB
 
 func InitDB() error {
-	dbPath := os.Getenv("GAGENT_DB_PATH")
-	if dbPath == "" {
-		dbPath = filepath.Join(DataDir, "agent.db")
-	}
+	dbPath := AgentDBPath
 
 	dbDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {

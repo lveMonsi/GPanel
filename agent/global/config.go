@@ -12,8 +12,8 @@ var (
 	ServerMode     = "release"
 	ListenAddr     = "127.0.0.1:9998"
 	LogLevel       = "info"
-	LogFile        = "/var/log/gpanel/agent.log"
-	DataDir        = "/var/lib/gpanel"
+	LogFile        = AgentLogFile
+	DataDir        = DataDirPath
 	AllowedOrigins = []string{} // 允许的 WebSocket Origins，为空时允许所有
 	APIKey         = ""         // API Key 认证密钥，为空时跳过认证
 )
@@ -30,12 +30,6 @@ func InitConfig() error {
 	}
 	if logLevel := os.Getenv("GAGENT_LOG_LEVEL"); logLevel != "" {
 		LogLevel = logLevel
-	}
-	if logFile := os.Getenv("GAGENT_LOG_FILE"); logFile != "" {
-		LogFile = logFile
-	}
-	if dataDir := os.Getenv("GAGENT_DATA_DIR"); dataDir != "" {
-		DataDir = dataDir
 	}
 	// 读取 API Key
 	if key := os.Getenv("GAGENT_API_KEY"); key != "" {

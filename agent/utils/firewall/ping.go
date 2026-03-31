@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gpanel/agent/global"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -147,7 +148,11 @@ func updatePingStatusPersistent(enable string) error {
 	}
 
 	// 使用临时文件写入，避免权限问题
-	tmpFile := "/tmp/gpanel_sysctl.tmp"
+	tmpDir := global.GetTempDir()
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %v", err)
+	}
+	tmpFile := filepath.Join(tmpDir, "gpanel_sysctl.tmp")
 	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write temp file: %v", err)
 	}
