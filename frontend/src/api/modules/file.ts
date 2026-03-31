@@ -1,3 +1,5 @@
+import type { AxiosProgressEvent } from 'axios';
+
 import request from '@/utils/axios';
 import type {
   ApiResponse,
@@ -84,10 +86,11 @@ export const fileApi = {
   },
 
   // 下载文件
-  downloadFile: (path: string) => {
+  downloadFile: (path: string, onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void) => {
     return request.get<Blob>(`/api/v1/files/download?path=${encodeURIComponent(path)}`, {
       responseType: 'blob',
       timeout: 0,
+      onDownloadProgress,
     });
   },
 

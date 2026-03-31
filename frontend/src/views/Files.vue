@@ -311,6 +311,16 @@
         <el-button type="primary" @click="startRemoteDownload" :loading="remoteDownloading">开始下载</el-button>
       </template>
     </el-dialog>
+
+    <DownloadProgressDialog
+      :visible="downloadDialogVisible"
+      :file-name="downloadFileName"
+      :percentage="downloadPercent"
+      :status="downloadStatus"
+      :message="downloadMessage"
+      :transfer-text="downloadTransferText"
+      @update:visible="handleDownloadDialogVisibleChange"
+    />
     </template>
   </div>
 </template>
@@ -346,7 +356,9 @@ import {
 } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
 import type { FileInfo, FileMoveReq, RemoteDownloadReq } from '@/api/interface/file';
+import DownloadProgressDialog from '@/components/DownloadProgressDialog.vue';
 import FileEditor from '@/components/FileEditor.vue';
+import { useDownloadProgress } from '@/composables/useDownloadProgress';
 
 const currentPath = ref('/');
 const fileList = ref<FileInfo[]>([]);
@@ -381,6 +393,17 @@ const uploadDialogVisible = ref(false);
 const uploadFileList = ref<File[]>([]);
 const uploading = ref(false);
 const overwrite = ref(false);
+
+const {
+  downloadDialogVisible,
+  downloadStatus,
+  downloadFileName,
+  downloadPercent,
+  downloadMessage,
+  downloadTransferText,
+  handleDownloadDialogVisibleChange,
+  downloadFile: startDownloadWithProgress,
+} = useDownloadProgress();
 
 const compressDialogVisible = ref(false);
 const compressForm = ref({ name: '', type: 'tar.gz' });
@@ -729,20 +752,11 @@ const handleEditorSave = () => {
 };
 
 const downloadFile = async (row: FileInfo) => {
-  try {
-    const backendPath = toBackendPath(row.path);
-    const response = await fileApi.downloadFile(backendPath);
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', row.name);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (error: any) {
-    ElMessage.error(error.message || '下载失败');
-  }
+  await startDownloadWithProgress({
+    backendPath: toBackendPath(row.path),
+    fileName: row.name,
+    size: row.size,
+  });
 };
 
 const deleteFile = async (row: FileInfo) => {
@@ -1267,6 +1281,7 @@ onMounted(() => {
   .file-table :deep(.el-table__body-wrapper) {
     overflow-x: auto;
   }
+
 }
 
 @media (max-width: 576px) {

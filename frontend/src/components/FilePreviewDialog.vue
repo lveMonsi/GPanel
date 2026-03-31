@@ -40,10 +40,20 @@
       <div v-else class="no-preview">
         <el-icon :size="64"><Document /></el-icon>
         <p>此文件类型不支持预览</p>
-        <el-button type="primary" @click="downloadFile">下载文件</el-button>
+        <el-button type="primary" @click="handleDownloadFile">下载文件</el-button>
       </div>
     </div>
   </el-dialog>
+
+  <DownloadProgressDialog
+    :visible="downloadDialogVisible"
+    :file-name="downloadFileName"
+    :percentage="downloadPercent"
+    :status="downloadStatus"
+    :message="downloadMessage"
+    :transfer-text="downloadTransferText"
+    @update:visible="handleDownloadDialogVisibleChange"
+  />
 </template>
 
 <script setup lang="ts">
@@ -52,6 +62,8 @@ import { ElMessage } from 'element-plus';
 import { Document } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
 import type { FileInfo } from '@/api/interface/file';
+import DownloadProgressDialog from '@/components/DownloadProgressDialog.vue';
+import { useDownloadProgress } from '@/composables/useDownloadProgress';
 
 const props = defineProps<{
   visible: boolean;
@@ -66,6 +78,17 @@ const dialogVisible = ref(false);
 const loading = ref(false);
 const previewContent = ref('');
 const previewType = ref<'image' | 'text' | 'video' | 'audio' | 'pdf' | 'none'>('none');
+
+const {
+  downloadDialogVisible,
+  downloadStatus,
+  downloadFileName,
+  downloadPercent,
+  downloadMessage,
+  downloadTransferText,
+  handleDownloadDialogVisibleChange,
+  downloadFile: startDownloadWithProgress,
+} = useDownloadProgress();
 
 const fileName = computed(() => props.file?.name || '');
 
@@ -151,22 +174,14 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
   return new Blob([byteArray], { type: mimeType });
 };
 
-const downloadFile = async () => {
+const handleDownloadFile = async () => {
   if (!props.file) return;
-  
-  try {
-    const response = await fileApi.downloadFile(props.file.path);
-    const url = URL.createObjectURL(response.data);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = props.file.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  } catch (error: any) {
-    ElMessage.error(error.message || '下载失败');
-  }
+
+  await startDownloadWithProgress({
+    backendPath: props.file.path,
+    fileName: props.file.name,
+    size: props.file.size,
+  });
 };
 
 const handleClose = () => {
