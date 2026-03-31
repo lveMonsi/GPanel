@@ -328,12 +328,33 @@ const timeShortcuts = [
   { text: '最近7天', value: () => createRecentRange(604800000) }
 ]
 
+const isValidTimeRange = (range?: TimeRange | null): range is TimeRange => {
+  return Array.isArray(range) && range.length === 2 && Boolean(range[0]) && Boolean(range[1])
+}
+
+const extendTimeRangeToNow = (range: TimeRange): TimeRange => {
+  if (!isValidTimeRange(range)) return getTodayRange()
+
+  const end = formatPanelDateTime(new Date())
+  return [range[0], end]
+}
+
+const syncLiveTimeRanges = () => {
+  globalTimeRange.value = extendTimeRangeToNow(globalTimeRange.value)
+  loadTimeRange.value = extendTimeRangeToNow(loadTimeRange.value)
+  cpuTimeRange.value = extendTimeRangeToNow(cpuTimeRange.value)
+  memTimeRange.value = extendTimeRangeToNow(memTimeRange.value)
+  ioTimeRange.value = extendTimeRangeToNow(ioTimeRange.value)
+  netTimeRange.value = extendTimeRangeToNow(netTimeRange.value)
+}
+
 const applyGlobalTime = () => {
   syncAllTimeRanges(globalTimeRange.value)
   refreshAll()
 }
 
 const refreshAll = () => {
+  syncLiveTimeRanges()
   fetchChartData('load')
   fetchChartData('cpu')
   fetchChartData('memory')
@@ -682,9 +703,14 @@ const handleMonitorDataCleared = async () => {
   refreshAll()
 }
 
+const handleMonitorDashboardActivated = () => {
+  refreshAll()
+}
+
 onMounted(async () => {
   window.addEventListener('monitor-settings-updated', handleMonitorSettingsUpdated)
   window.addEventListener('monitor-data-cleared', handleMonitorDataCleared)
+  window.addEventListener('monitor-dashboard-activated', handleMonitorDashboardActivated)
 
   await loadMonitorMeta()
   refreshAll()
@@ -693,6 +719,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('monitor-settings-updated', handleMonitorSettingsUpdated)
   window.removeEventListener('monitor-data-cleared', handleMonitorDataCleared)
+  window.removeEventListener('monitor-dashboard-activated', handleMonitorDashboardActivated)
   Object.values(chartInstances).forEach(chart => chart?.dispose())
 })
 </script>

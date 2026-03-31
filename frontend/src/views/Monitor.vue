@@ -12,11 +12,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import MonitorDashboard from '@/components/MonitorDashboard.vue'
 import MonitorSettings from '@/components/MonitorSettings.vue'
 
 const activeTab = ref('dashboard')
+
+watch(activeTab, (tab) => {
+  if (tab === 'dashboard') {
+    window.dispatchEvent(new CustomEvent('monitor-dashboard-activated'))
+  }
+})
 </script>
 
 <style scoped>

@@ -417,6 +417,7 @@ func (s *MonitorService) ClearData() error {
 	}
 
 	s.resetBaselinesLocked()
+	NotifyMonitorScheduler()
 	return nil
 }
 
