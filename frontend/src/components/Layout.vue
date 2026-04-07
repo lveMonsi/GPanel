@@ -22,6 +22,22 @@
           <el-icon class="nav-icon"><Monitor /></el-icon>
           <span class="nav-text">终端</span>
         </router-link>
+        <router-link to="/ssh" class="nav-item" active-class="active">
+          <el-icon class="nav-icon"><Connection /></el-icon>
+          <span class="nav-text">SSH管理</span>
+        </router-link>
+        <router-link to="/process" class="nav-item" active-class="active">
+          <el-icon class="nav-icon"><List /></el-icon>
+          <span class="nav-text">进程管理</span>
+        </router-link>
+        <router-link to="/scripts" class="nav-item" active-class="active">
+          <el-icon class="nav-icon"><Document /></el-icon>
+          <span class="nav-text">脚本管理</span>
+        </router-link>
+        <router-link to="/logs" class="nav-item" active-class="active">
+          <el-icon class="nav-icon"><Document /></el-icon>
+          <span class="nav-text">日志管理</span>
+        </router-link>
         <router-link to="/monitor" class="nav-item" active-class="active">
           <el-icon class="nav-icon"><Connection /></el-icon>
           <span class="nav-text">监控</span>
@@ -45,7 +61,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { DataBoard, Setting, SwitchButton, Folder, Lock, Monitor, Connection } from '@element-plus/icons-vue'
+import { DataBoard, Setting, SwitchButton, Folder, Lock, Monitor, Connection, List, Document } from '@element-plus/icons-vue'
 
 const router = useRouter()
 

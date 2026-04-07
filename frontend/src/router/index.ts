@@ -103,6 +103,58 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Monitor.vue')
       }
     ]
+  },
+  {
+    path: '/ssh',
+    name: 'SshManagement',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'SshManagementMain',
+        component: () => import('@/views/SshManagement.vue')
+      }
+    ]
+  },
+  {
+    path: '/process',
+    name: 'ProcessManagement',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'ProcessManagementMain',
+        component: () => import('@/views/ProcessManagement.vue')
+      }
+    ]
+  },
+  {
+    path: '/scripts',
+    name: 'ScriptManagement',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'ScriptManagementMain',
+        component: () => import('@/views/ScriptManagement.vue')
+      }
+    ]
+  },
+  {
+    path: '/logs',
+    name: 'LogManagement',
+    component: Layout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'LogManagementMain',
+        component: () => import('@/views/LogManagement.vue')
+      }
+    ]
   }
 ]
 
