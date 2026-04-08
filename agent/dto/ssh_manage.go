@@ -2,11 +2,13 @@ package dto
 
 type SSHInfo struct {
 	IsActive        bool   `json:"isActive"`
+	AutoStart       bool   `json:"autoStart"`
 	Port            int    `json:"port"`
 	ListenAddress   string `json:"listenAddress"`
 	PasswordAuth    string `json:"passwordAuth"`
 	PubkeyAuth      string `json:"pubkeyAuth"`
 	PermitRootLogin string `json:"permitRootLogin"`
+	UseDNS          string `json:"useDNS"`
 }
 
 type SSHSession struct {

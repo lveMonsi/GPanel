@@ -19,6 +19,13 @@ func NewSSHService() *SSHService {
 	return &SSHService{}
 }
 
+func sshServiceName() string {
+	if err := exec.Command("systemctl", "is-active", "--quiet", "sshd").Run(); err == nil {
+		return "sshd"
+	}
+	return "ssh"
+}
+
 func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 	info := dto.SSHInfo{
 		Port:            22,
@@ -26,13 +33,16 @@ func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 		PasswordAuth:    "yes",
 		PubkeyAuth:      "yes",
 		PermitRootLogin: "yes",
+		UseDNS:          "yes",
 	}
 
-	// Check service status
-	out, _ := exec.Command("systemctl", "is-active", "sshd").Output()
+	svc := sshServiceName()
+	out, _ := exec.Command("systemctl", "is-active", svc).Output()
 	info.IsActive = strings.TrimSpace(string(out)) == "active"
 
-	// Parse config
+	out, _ = exec.Command("systemctl", "is-enabled", svc).Output()
+	info.AutoStart = strings.TrimSpace(string(out)) == "enabled"
+
 	f, err := os.Open(sshdConfig)
 	if err != nil {
 		return info, nil
@@ -63,15 +73,18 @@ func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 			info.PubkeyAuth = strings.ToLower(val)
 		case "PermitRootLogin":
 			info.PermitRootLogin = strings.ToLower(val)
+		case "UseDNS":
+			info.UseDNS = strings.ToLower(val)
 		}
 	}
 	return info, nil
 }
 
 func (s *SSHService) OperateSSH(operation string) error {
+	svc := sshServiceName()
 	switch operation {
-	case "start", "stop", "restart":
-		return exec.Command("systemctl", operation, "sshd").Run()
+	case "start", "stop", "restart", "enable", "disable":
+		return exec.Command("systemctl", operation, svc).Run()
 	default:
 		return fmt.Errorf("invalid operation: %s", operation)
 	}
@@ -101,47 +114,30 @@ func (s *SSHService) UpdateSSHConfig(key, value string) error {
 }
 
 func (s *SSHService) GetSSHSessions() ([]dto.SSHSession, error) {
-	out, err := exec.Command("who").Output()
+	out, err := exec.Command("who", "-u").Output()
 	if err != nil {
 		return nil, err
 	}
 
 	var sessions []dto.SSHSession
+	// who -u format: user tty date time idle pid (host)
+	re := regexp.MustCompile(`^(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(\d+)\s+\(([^)]+)\)`)
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
-	// who output: username tty date time (host)
-	re := regexp.MustCompile(`^(\S+)\s+(\S+)\s+(.+?)\s+\(([^)]+)\)`)
 	for scanner.Scan() {
-		line := scanner.Text()
-		m := re.FindStringSubmatch(line)
+		m := re.FindStringSubmatch(scanner.Text())
 		if m == nil {
 			continue
 		}
-		username, tty, loginTime, host := m[1], m[2], m[3], m[4]
-		// Only SSH sessions have a host in parentheses that looks like an IP
-		pid := s.getSessionPID(tty)
+		pid, _ := strconv.Atoi(m[4])
 		sessions = append(sessions, dto.SSHSession{
 			PID:       pid,
-			Username:  username,
-			Terminal:  tty,
-			Host:      host,
-			LoginTime: loginTime,
+			Username:  m[1],
+			Terminal:  m[2],
+			LoginTime: m[3],
+			Host:      m[5],
 		})
 	}
 	return sessions, nil
-}
-
-func (s *SSHService) getSessionPID(tty string) int {
-	// Get PID of the process owning the tty
-	out, err := exec.Command("ps", "-t", tty, "-o", "pid=", "--no-headers").Output()
-	if err != nil {
-		return 0
-	}
-	lines := strings.Fields(strings.TrimSpace(string(out)))
-	if len(lines) == 0 {
-		return 0
-	}
-	pid, _ := strconv.Atoi(lines[0])
-	return pid
 }
 
 func (s *SSHService) KillSSHSession(pid int) error {
@@ -152,31 +148,40 @@ func (s *SSHService) KillSSHSession(pid int) error {
 }
 
 func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SSHLogRes, error) {
-	logFile := "/var/log/auth.log"
-	if _, err := os.Stat(logFile); os.IsNotExist(err) {
-		logFile = "/var/log/secure"
+	var lines []string
+
+	for _, f := range []string{"/var/log/auth.log.1", "/var/log/auth.log", "/var/log/secure"} {
+		data, err := os.ReadFile(f)
+		if err == nil {
+			lines = append(lines, strings.Split(string(data), "\n")...)
+		}
 	}
 
-	f, err := os.Open(logFile)
-	if err != nil {
-		return dto.SSHLogRes{Items: []dto.SSHLogItem{}}, nil
+	if len(lines) == 0 {
+		out, err := exec.Command("journalctl", "-u", "sshd", "--no-pager", "-n", "10000").Output()
+		if err == nil {
+			lines = strings.Split(string(out), "\n")
+		}
 	}
-	defer f.Close()
 
-	// Patterns for accepted and failed logins
-	acceptedRe := regexp.MustCompile(`(\w+\s+\d+\s+\d+:\d+:\d+).*sshd.*Accepted\s+(\w+)\s+for\s+(\S+)\s+from\s+(\S+)\s+port\s+(\d+)`)
-	failedRe := regexp.MustCompile(`(\w+\s+\d+\s+\d+:\d+:\d+).*sshd.*Failed\s+(\w+)\s+for\s+(?:invalid user\s+)?(\S+)\s+from\s+(\S+)\s+port\s+(\d+)`)
+	acceptedRe := regexp.MustCompile(`Accepted (password|publickey|keyboard-interactive) for (\S+) from (\S+) port (\d+)`)
+	failedRe := regexp.MustCompile(`Failed (password|publickey|keyboard-interactive) for (?:invalid user )?(\S+) from (\S+) port (\d+)`)
+	invalidRe := regexp.MustCompile(`Invalid user (\S+) from (\S+) port (\d+)`)
+	dateRe := regexp.MustCompile(`^(\w+\s+\d+\s+\d+:\d+:\d+)`)
 
 	var items []dto.SSHLogItem
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
+	for _, line := range lines {
 		var item dto.SSHLogItem
-
+		date := ""
+		if m := dateRe.FindStringSubmatch(line); m != nil {
+			date = m[1]
+		}
 		if m := acceptedRe.FindStringSubmatch(line); m != nil {
-			item = dto.SSHLogItem{Date: m[1], AuthMode: m[2], User: m[3], Address: m[4], Port: m[5], Status: "success"}
+			item = dto.SSHLogItem{Date: date, AuthMode: m[1], User: m[2], Address: m[3], Port: m[4], Status: "success"}
 		} else if m := failedRe.FindStringSubmatch(line); m != nil {
-			item = dto.SSHLogItem{Date: m[1], AuthMode: m[2], User: m[3], Address: m[4], Port: m[5], Status: "failed"}
+			item = dto.SSHLogItem{Date: date, AuthMode: m[1], User: m[2], Address: m[3], Port: m[4], Status: "failed"}
+		} else if m := invalidRe.FindStringSubmatch(line); m != nil {
+			item = dto.SSHLogItem{Date: date, AuthMode: "password", User: m[1], Address: m[2], Port: m[3], Status: "failed"}
 		} else {
 			continue
 		}
@@ -191,20 +196,17 @@ func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SS
 	}
 
 	total := int64(len(items))
+	// reverse
+	for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+		items[i], items[j] = items[j], items[i]
+	}
 	start := (page - 1) * pageSize
-	end := start + pageSize
 	if start > len(items) {
 		start = len(items)
 	}
+	end := start + pageSize
 	if end > len(items) {
 		end = len(items)
 	}
-
-	// Return in reverse order (newest first)
-	reversed := make([]dto.SSHLogItem, len(items))
-	for i, v := range items {
-		reversed[len(items)-1-i] = v
-	}
-
-	return dto.SSHLogRes{Total: total, Items: reversed[start:end]}, nil
+	return dto.SSHLogRes{Total: total, Items: items[start:end]}, nil
 }

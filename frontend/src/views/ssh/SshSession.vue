@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Refresh } from '@element-plus/icons-vue';
 import { getSSHSessions, killSSHSession } from '@/api/modules/ssh';
@@ -44,7 +44,6 @@ interface SessionItem {
 const loading = ref(false);
 const searchUser = ref('');
 const sessions = ref<SessionItem[]>([]);
-let timer: ReturnType<typeof setInterval> | null = null;
 
 const filteredData = computed(() =>
   searchUser.value
@@ -81,11 +80,6 @@ const handleDisconnect = async (row: SessionItem) => {
 
 onMounted(() => {
   loadSessions();
-  timer = setInterval(loadSessions, 5000);
-});
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer);
 });
 </script>
 

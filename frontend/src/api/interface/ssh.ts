@@ -5,6 +5,8 @@ export interface SSHInfo {
   passwordAuth: string;
   pubkeyAuth: string;
   permitRootLogin: string;
+  autoStart: boolean;
+  useDNS: string;
 }
 
 export interface SSHSession {
