@@ -1,55 +1,73 @@
 <template>
-  <div class="placeholder-page">
-    <div class="placeholder-card">
-      <span class="placeholder-tag">即将开放</span>
-      <h1 class="placeholder-title">SSH管理</h1>
-      <p class="placeholder-description">
-        当前为页面占位文件，后续可在这里接入 SSH 连接配置、会话管理与权限控制等功能。
-      </p>
+  <div class="ssh-management">
+    <div class="nav-tabs">
+      <div
+        v-for="tab in tabs"
+        :key="tab.name"
+        :class="['tab-item', { active: activeTab === tab.name }]"
+        @click="activeTab = tab.name"
+      >
+        {{ tab.label }}
+      </div>
+    </div>
+
+    <div class="tab-content">
+      <SshConfig v-if="activeTab === 'config'" />
+      <SshSession v-else-if="activeTab === 'session'" />
+      <SshLog v-else-if="activeTab === 'log'" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
+import SshConfig from './ssh/SshConfig.vue';
+import SshSession from './ssh/SshSession.vue';
+import SshLog from './ssh/SshLog.vue';
+
+const activeTab = ref('config');
+const tabs = [
+  { name: 'config', label: '配置' },
+  { name: 'session', label: '会话' },
+  { name: 'log', label: '日志' },
+];
 </script>
 
 <style scoped>
-.placeholder-page {
-  min-height: calc(100vh - 60px);
-  padding: 1.25rem;
-  background: var(--bg-color);
+.ssh-management {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fafafa;
 }
 
-.placeholder-card {
-  max-width: 720px;
-  padding: 2rem;
-  background: var(--card-bg);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+.nav-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #e4e7ed;
+  padding: 0 20px;
 }
 
-.placeholder-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(64, 158, 255, 0.12);
-  color: var(--primary);
-  font-size: 0.8rem;
-  font-weight: 500;
+.tab-item {
+  padding: 16px 24px;
+  cursor: pointer;
+  color: #606266;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.3s;
 }
 
-.placeholder-title {
-  margin: 1rem 0 0.75rem;
-  color: var(--text-primary);
-  font-size: 1.75rem;
-  font-weight: 600;
+.tab-item:hover {
+  color: #409eff;
 }
 
-.placeholder-description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  line-height: 1.7;
+.tab-item.active {
+  color: #409eff;
+  border-bottom-color: #409eff;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: auto;
 }
 </style>
