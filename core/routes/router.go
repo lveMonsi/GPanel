@@ -152,8 +152,17 @@ func SetupRouter(r *gin.Engine) {
 
 			// 防火墙 API（代理到 Agent）
 			firewallController, _ := controllers.NewFirewallController()
+			sshController, _ := controllers.NewSSHController()
 			agent := v1.Group("/agent")
 			{
+				// SSH管理 API
+				agent.GET("/ssh/info", middleware.Auth(), sshController.GetSSHInfo)
+				agent.POST("/ssh/operate", middleware.Auth(), sshController.OperateSSH)
+				agent.POST("/ssh/config", middleware.Auth(), sshController.UpdateSSHConfig)
+				agent.GET("/ssh/sessions", middleware.Auth(), sshController.GetSSHSessions)
+				agent.POST("/ssh/sessions/kill", middleware.Auth(), sshController.KillSSHSession)
+				agent.POST("/ssh/logs", middleware.Auth(), sshController.GetSSHLogs)
+
 				agent.POST("/firewall/base", middleware.Auth(), firewallController.LoadBaseInfo)
 				agent.POST("/firewall/search", middleware.Auth(), firewallController.SearchRules)
 				agent.POST("/firewall/operate", middleware.Auth(), firewallController.OperateFirewall)

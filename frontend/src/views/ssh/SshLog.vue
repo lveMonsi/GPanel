@@ -51,11 +51,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { Refresh } from '@element-plus/icons-vue';
+import { getSSHLogs } from '@/api/modules/ssh';
+import type { SSHLogItem } from '@/api/interface/ssh';
 
 const loading = ref(false);
 const searchStatus = ref('all');
 const searchText = ref('');
-const logs = ref([]);
+const logs = ref<SSHLogItem[]>([]);
 const pagination = reactive({
   page: 1,
   pageSize: 20,
@@ -65,9 +67,14 @@ const pagination = reactive({
 const loadLogs = async () => {
   loading.value = true;
   try {
-    // TODO: 调用API获取SSH日志
-    logs.value = [];
-    pagination.total = 0;
+    const res = await getSSHLogs({
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      status: searchStatus.value,
+      info: searchText.value,
+    });
+    logs.value = res.data?.items || [];
+    pagination.total = res.data?.total || 0;
   } finally {
     loading.value = false;
   }

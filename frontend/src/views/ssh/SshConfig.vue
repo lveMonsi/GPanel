@@ -82,6 +82,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { getSSHInfo, operateSSH, updateSSHConfig } from '@/api/modules/ssh';
 
 const sshInfo = ref({
   isActive: false,
@@ -93,38 +94,34 @@ const sshInfo = ref({
 });
 
 const loadSSHInfo = async () => {
-  // TODO: 调用API获取SSH信息
-  console.log('加载SSH信息');
+  try {
+    const res = await getSSHInfo();
+    if (res.data) Object.assign(sshInfo.value, res.data);
+  } catch (e: any) {
+    ElMessage.error(e.message || '获取SSH信息失败');
+  }
 };
 
 const handleOperate = async (operation: string) => {
   const operationText = operation === 'start' ? '启动' : operation === 'stop' ? '停止' : '重启';
   try {
-    await ElMessageBox.confirm(`确认${operationText}SSH服务吗?`, '确认操作', {
-      type: 'warning',
-    });
-    // TODO: 调用API执行操作
+    await ElMessageBox.confirm(`确认${operationText}SSH服务吗?`, '确认操作', { type: 'warning' });
+    await operateSSH(operation);
     ElMessage.success('操作成功');
     await loadSSHInfo();
   } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '操作失败');
-    }
+    if (error !== 'cancel') ElMessage.error(error.message || '操作失败');
   }
 };
 
 const handleConfigChange = async (key: string, value: string) => {
   try {
-    await ElMessageBox.confirm(`确认修改SSH配置吗?`, '确认操作', {
-      type: 'warning',
-    });
-    // TODO: 调用API修改配置
+    await ElMessageBox.confirm(`确认修改SSH配置吗?`, '确认操作', { type: 'warning' });
+    await updateSSHConfig(key, value);
     ElMessage.success('配置已更新');
     await loadSSHInfo();
   } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '配置更新失败');
-    }
+    if (error !== 'cancel') ElMessage.error(error.message || '配置更新失败');
     await loadSSHInfo();
   }
 };

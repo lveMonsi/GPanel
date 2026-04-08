@@ -31,6 +31,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Refresh } from '@element-plus/icons-vue';
+import { getSSHSessions, killSSHSession } from '@/api/modules/ssh';
 
 interface SessionItem {
   pid: number;
@@ -56,8 +57,8 @@ const filterData = () => {};
 const loadSessions = async () => {
   loading.value = true;
   try {
-    // TODO: 调用API获取SSH会话列表
-    sessions.value = [];
+    const res = await getSSHSessions();
+    sessions.value = res.data || [];
   } catch (e) {
     // ignore
   } finally {
@@ -70,7 +71,7 @@ const handleDisconnect = async (row: SessionItem) => {
     await ElMessageBox.confirm(`确认断开用户 ${row.username} 的SSH连接吗?`, '确认操作', {
       type: 'warning',
     });
-    // TODO: 调用API断开连接
+    await killSSHSession(row.pid);
     ElMessage.success('已断开连接');
     await loadSessions();
   } catch (e: any) {
