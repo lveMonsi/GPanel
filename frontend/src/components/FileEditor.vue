@@ -337,32 +337,50 @@ import {
   DArrowRight,
 } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
-import * as monaco from 'monaco-editor';
+import type * as Monaco from 'monaco-editor';
 
-// 配置 Monaco Editor Web Worker
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
-import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
-import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+// Monaco Editor 动态导入
+let monaco: typeof Monaco | null = null;
+let monacoLoading: Promise<typeof Monaco> | null = null;
 
-// 注册 Worker
-(self as any).MonacoEnvironment = {
-  getWorker(_: any, label: string) {
-    if (label === 'json') {
-      return new jsonWorker();
-    }
-    if (label === 'css' || label === 'scss' || label === 'less') {
-      return new cssWorker();
-    }
-    if (label === 'html' || label === 'handlebars' || label === 'razor') {
-      return new htmlWorker();
-    }
-    if (label === 'typescript' || label === 'javascript') {
-      return new tsWorker();
-    }
-    return new editorWorker();
-  },
+const loadMonaco = async (): Promise<typeof Monaco> => {
+  if (monaco) return monaco;
+  if (monacoLoading) return monacoLoading;
+
+  monacoLoading = (async () => {
+    const [monacoModule, editorWorker, jsonWorker, cssWorker, htmlWorker, tsWorker] = await Promise.all([
+      import('monaco-editor'),
+      import('monaco-editor/esm/vs/editor/editor.worker?worker'),
+      import('monaco-editor/esm/vs/language/json/json.worker?worker'),
+      import('monaco-editor/esm/vs/language/css/css.worker?worker'),
+      import('monaco-editor/esm/vs/language/html/html.worker?worker'),
+      import('monaco-editor/esm/vs/language/typescript/ts.worker?worker'),
+    ]);
+
+    // 注册 Worker
+    (self as any).MonacoEnvironment = {
+      getWorker(_: any, label: string) {
+        if (label === 'json') {
+          return new jsonWorker.default();
+        }
+        if (label === 'css' || label === 'scss' || label === 'less') {
+          return new cssWorker.default();
+        }
+        if (label === 'html' || label === 'handlebars' || label === 'razor') {
+          return new htmlWorker.default();
+        }
+        if (label === 'typescript' || label === 'javascript') {
+          return new tsWorker.default();
+        }
+        return new editorWorker.default();
+      },
+    };
+
+    monaco = monacoModule;
+    return monacoModule;
+  })();
+
+  return monacoLoading;
 };
 
 // Props
@@ -422,8 +440,8 @@ const languages = [
 
 // 换行符选项
 const eols = [
-  { label: 'LF (Linux/macOS)', value: monaco.editor.EndOfLineSequence.LF },
-  { label: 'CRLF (Windows)', value: monaco.editor.EndOfLineSequence.CRLF },
+  { label: 'LF (Linux/macOS)', value: 1 }, // EndOfLineSequence.LF
+  { label: 'CRLF (Windows)', value: 0 }, // EndOfLineSequence.CRLF
 ];
 
 // ==================== 状态定义 ====================
@@ -436,14 +454,14 @@ const isMobile = ref(false);
 
 // 编辑器相关
 const editorContainer = ref<HTMLElement | null>(null);
-const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+const editor = shallowRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 const cursorPosition = ref({ line: 1, column: 1 });
 
 // 编辑器配置
 const config = ref({
   theme: localStorage.getItem(STORAGE_KEYS.THEME) || 'vs-dark',
   language: 'plaintext',
-  eol: monaco.editor.EndOfLineSequence.LF,
+  eol: 1, // LF
   wordWrap: (localStorage.getItem(STORAGE_KEYS.WORD_WRAP) as 'on' | 'off') || 'on',
   minimap: localStorage.getItem(STORAGE_KEYS.MINIMAP) !== 'false',
 });
@@ -539,93 +557,87 @@ const getFileName = (filePath: string): string => {
 };
 
 // ==================== 编辑器操作 ====================
-const initEditor = (): Promise<void> => {
-  return new Promise((resolve) => {
-    if (!editorContainer.value) {
-      resolve();
-      return;
+const initEditor = async (): Promise<void> => {
+  if (!editorContainer.value) return;
+
+  // 动态加载 Monaco Editor
+  const monacoInstance = await loadMonaco();
+
+  // 销毁旧编辑器
+  if (editor.value) {
+    editor.value.dispose();
+    editor.value = null;
+  }
+
+  await nextTick();
+
+  if (!editorContainer.value) return;
+
+  editor.value = monacoInstance.editor.create(editorContainer.value, {
+    value: currentFile.value?.content || '',
+    language: config.value.language,
+    theme: config.value.theme,
+    automaticLayout: true,
+    fontSize: 14,
+    lineNumbers: 'on',
+    minimap: { enabled: config.value.minimap },
+    wordWrap: config.value.wordWrap,
+    scrollBeyondLastLine: false,
+    renderWhitespace: 'selection',
+    tabSize: 4,
+    insertSpaces: true,
+    folding: true,
+    foldingStrategy: 'auto',
+    showFoldingControls: 'mouseover',
+    matchBrackets: 'always',
+    autoClosingBrackets: 'always',
+    autoClosingQuotes: 'always',
+    formatOnPaste: true,
+    formatOnType: true,
+  });
+
+  // 设置换行符
+  if (currentFile.value) {
+    editor.value.getModel()?.setEOL(config.value.eol);
+  }
+
+  // 监听内容变化
+  editor.value.onDidChangeModelContent(() => {
+    if (editor.value && currentFile.value) {
+      const newContent = editor.value.getValue();
+      currentFile.value.content = newContent;
+      currentFile.value.modified = newContent !== currentFile.value.originalContent;
     }
-    
-    // 销毁旧编辑器
-    if (editor.value) {
-      editor.value.dispose();
-      editor.value = null;
-    }
+  });
 
-    nextTick(() => {
-      if (!editorContainer.value) {
-        resolve();
-        return;
-      }
-      
-      editor.value = monaco.editor.create(editorContainer.value, {
-        value: currentFile.value?.content || '',
-        language: config.value.language,
-        theme: config.value.theme,
-        automaticLayout: true,
-        fontSize: 14,
-        lineNumbers: 'on',
-        minimap: { enabled: config.value.minimap },
-        wordWrap: config.value.wordWrap,
-        scrollBeyondLastLine: false,
-        renderWhitespace: 'selection',
-        tabSize: 4,
-        insertSpaces: true,
-        folding: true,
-        foldingStrategy: 'auto',
-        showFoldingControls: 'mouseover',
-        matchBrackets: 'always',
-        autoClosingBrackets: 'always',
-        autoClosingQuotes: 'always',
-        formatOnPaste: true,
-        formatOnType: true,
-      });
+  // 监听光标位置
+  editor.value.onDidChangeCursorPosition((e) => {
+    cursorPosition.value = {
+      line: e.position.lineNumber,
+      column: e.position.column,
+    };
+  });
 
-      // 设置换行符
-      if (currentFile.value) {
-        editor.value.getModel()?.setEOL(config.value.eol);
-      }
-
-      // 监听内容变化
-      editor.value.onDidChangeModelContent(() => {
-        if (editor.value && currentFile.value) {
-          const newContent = editor.value.getValue();
-          currentFile.value.content = newContent;
-          currentFile.value.modified = newContent !== currentFile.value.originalContent;
-        }
-      });
-
-      // 监听光标位置
-      editor.value.onDidChangeCursorPosition((e) => {
-        cursorPosition.value = {
-          line: e.position.lineNumber,
-          column: e.position.column,
-        };
-      });
-
-      // 快捷键保存
-      editor.value.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        saveCurrentFile();
-      });
-
-      resolve();
-    });
+  // 快捷键保存
+  editor.value.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
+    saveCurrentFile();
   });
 };
 
-const updateEditorContent = () => {
+const updateEditorContent = async () => {
   if (!editor.value || !currentFile.value) return;
-  
+
+  const monacoInstance = await loadMonaco();
   const model = editor.value.getModel();
   if (model) {
     model.setValue(currentFile.value.content);
-    monaco.editor.setModelLanguage(model, currentFile.value.language);
-    
+    monacoInstance.editor.setModelLanguage(model, currentFile.value.language);
+
     // 检测换行符
     if (currentFile.value.content.includes('\r\n')) {
-      config.value.eol = monaco.editor.EndOfLineSequence.CRLF;
+      config.value.eol = 0; // CRLF
     } else {
-      config.value.eol = monaco.editor.EndOfLineSequence.LF;
+      config.value.eol = 1; // LF
     }
     model.setEOL(config.value.eol);
   }
@@ -897,18 +909,20 @@ const confirmCreate = async () => {
 };
 
 // ==================== 配置操作 ====================
-const changeTheme = (theme: string) => {
+const changeTheme = async (theme: string) => {
   config.value.theme = theme;
-  monaco.editor.setTheme(theme);
+  const monacoInstance = await loadMonaco();
+  monacoInstance.editor.setTheme(theme);
   localStorage.setItem(STORAGE_KEYS.THEME, theme);
 };
 
-const changeLanguage = (language: string) => {
+const changeLanguage = async (language: string) => {
   config.value.language = language;
   if (editor.value) {
+    const monacoInstance = await loadMonaco();
     const model = editor.value.getModel();
     if (model) {
-      monaco.editor.setModelLanguage(model, language);
+      monacoInstance.editor.setModelLanguage(model, language);
     }
   }
 };
