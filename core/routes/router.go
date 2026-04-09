@@ -17,6 +17,10 @@ import (
 //go:embed web/dist
 var frontendFS embed.FS
 
+// 缓存 index.html 内容
+var indexHTMLCache []byte
+var indexHTMLCacheErr error
+
 func SetupRouter(r *gin.Engine) {
 	// 启动 WebSocket 集线器
 	go utils.Hub.Run()
@@ -30,10 +34,6 @@ func SetupRouter(r *gin.Engine) {
 	r.GET("/debug-login", func(c *gin.Context) {
 		c.String(200, "Debug login route - should be accessible")
 	})
-
-	// 缓存 index.html 内容
-	var indexHTMLCache []byte
-	var indexHTMLCacheErr error
 
 	// 预加载 index.html
 	func() {
