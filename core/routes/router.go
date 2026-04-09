@@ -31,50 +31,38 @@ func SetupRouter(r *gin.Engine) {
 		c.String(200, "Debug login route - should be accessible")
 	})
 
-	// 登录路由（不需要 /api 前缀）
+	// 缓存 index.html 内容
+	var indexHTMLCache []byte
+	var indexHTMLCacheErr error
 
-	r.GET("/login", func(c *gin.Context) {
-
-		// 使用 embed.FS 返回前端登录页面
-
+	// 预加载 index.html
+	func() {
 		frontendDist, err := fs.Sub(frontendFS, "web/dist")
-
 		if err != nil {
-
-			c.String(500, "Failed to load frontend: %v", err)
-
+			indexHTMLCacheErr = err
 			return
-
 		}
-
 		indexFile, err := frontendDist.Open("index.html")
-
 		if err != nil {
-
-			c.String(500, "Failed to open index.html: %v", err)
-
+			indexHTMLCacheErr = err
 			return
-
 		}
-
 		defer indexFile.Close()
+		indexHTMLCache, indexHTMLCacheErr = io.ReadAll(indexFile)
+	}()
 
-		// 读取文件内容
-
-		content, err := io.ReadAll(indexFile)
-
-		if err != nil {
-
-			c.String(500, "Failed to read index.html: %v", err)
-
+	// 登录路由（不需要 /api 前缀）
+	r.GET("/login", func(c *gin.Context) {
+		if indexHTMLCacheErr != nil {
+			c.String(500, "Failed to load frontend: %v", indexHTMLCacheErr)
 			return
-
 		}
 
+		// 设置缓存头优化加载速度
 		c.Header("Content-Type", "text/html; charset=utf-8")
-
-		c.Data(200, "text/html; charset=utf-8", content)
-
+		c.Header("Cache-Control", "no-cache, must-revalidate")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Data(200, "text/html; charset=utf-8", indexHTMLCache)
 	})
 
 	r.POST("/login", controllers.Login)
@@ -253,6 +241,24 @@ func SetupFrontend(r *gin.Engine) {
 	r.GET("/assets/*filepath", func(c *gin.Context) {
 		filepath := c.Param("filepath")
 		c.Request.URL.Path = "/assets/" + filepath
+
+		// 设置强缓存，静态资源带 hash，可以长期缓存
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Header("X-Content-Type-Options", "nosniff")
+
+		// 根据文件扩展名设置 Content-Type
+		if strings.HasSuffix(filepath, ".js") {
+			c.Header("Content-Type", "application/javascript; charset=utf-8")
+		} else if strings.HasSuffix(filepath, ".css") {
+			c.Header("Content-Type", "text/css; charset=utf-8")
+		} else if strings.HasSuffix(filepath, ".woff2") {
+			c.Header("Content-Type", "font/woff2")
+		} else if strings.HasSuffix(filepath, ".woff") {
+			c.Header("Content-Type", "font/woff")
+		} else if strings.HasSuffix(filepath, ".ttf") {
+			c.Header("Content-Type", "font/ttf")
+		}
+
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 
@@ -267,7 +273,14 @@ func SetupFrontend(r *gin.Engine) {
 		}
 
 		// 对于其他所有请求，返回 index.html 以支持前端路由
-		c.Request.URL.Path = "/"
-		fileServer.ServeHTTP(c.Writer, c.Request)
+		if indexHTMLCacheErr != nil {
+			c.String(500, "Failed to load frontend: %v", indexHTMLCacheErr)
+			return
+		}
+
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.Header("Cache-Control", "no-cache, must-revalidate")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Data(200, "text/html; charset=utf-8", indexHTMLCache)
 	})
 }

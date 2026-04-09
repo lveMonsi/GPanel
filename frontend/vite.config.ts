@@ -45,23 +45,31 @@ export default defineConfig({
       output: {
         // 细粒度代码分割
         manualChunks(id) {
-          // Monaco Editor - 整体打包，避免循环依赖问题
+          // Monaco Editor - 按需加载，不打入主包
           if (id.includes('node_modules/monaco-editor/')) {
             return 'monaco-editor'
           }
-          // Vue 核心库
+          // xterm.js - 终端组件按需加载
+          if (id.includes('node_modules/@xterm/')) {
+            return 'xterm'
+          }
+          // echarts - 图表库按需加载
+          if (id.includes('node_modules/echarts/')) {
+            return 'echarts'
+          }
+          // Vue 核心库 - 关键依赖，优先加载
           if (id.includes('node_modules/vue/') || id.includes('node_modules/vue-router/') || id.includes('node_modules/pinia/')) {
             return 'vue-vendor'
           }
-          // Element Plus 组件库
+          // Element Plus 组件库 - 拆分为独立包
           if (id.includes('node_modules/element-plus/')) {
             return 'element-plus'
           }
-          // Element Plus 图标库
+          // Element Plus 图标库 - 独立加载
           if (id.includes('node_modules/@element-plus/icons-vue/')) {
             return 'element-icons'
           }
-          // HTTP 客户端
+          // HTTP 客户端 - 关键依赖
           if (id.includes('node_modules/axios/')) {
             return 'http-vendor'
           }
@@ -69,7 +77,11 @@ export default defineConfig({
           if (id.includes('node_modules/')) {
             return 'vendor'
           }
-        }
+        },
+        // 优化输出文件名，添加 hash 以支持长期缓存
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
     // 资源内联限制
@@ -78,9 +90,14 @@ export default defineConfig({
     sourcemap: false,
     // CSS 代码分割
     cssCodeSplit: true,
+    // 压缩选项
+    minify: 'esbuild',
+    // 清理输出目录
+    emptyOutDir: true,
   },
-  // 优化依赖预构建
+  // 优化依赖预构建 - 移除 monaco-editor，按需加载
   optimizeDeps: {
-    include: ['monaco-editor'],
+    include: ['vue', 'vue-router', 'pinia', 'axios', 'element-plus'],
+    exclude: ['monaco-editor', '@xterm/xterm', '@xterm/addon-fit', 'echarts'],
   },
 })

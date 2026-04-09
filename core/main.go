@@ -67,7 +67,19 @@ func main() {
 	serverMode := global.ConfigCacheInstance.GetServerMode()
 	gin.SetMode(serverMode)
 
-	r := gin.Default()
+	// 创建 Gin 引擎，优化性能
+	r := gin.New()
+
+	// 使用自定义的 Logger 和 Recovery 中间件
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	// 设置信任的代理
+	r.SetTrustedProxies(nil)
+
+	// 优化性能：禁用不必要的功能
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
 
 	// 添加安全入口中间件
 	r.Use(middleware.SecurityEntrance())
