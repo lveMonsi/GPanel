@@ -37,10 +37,10 @@
       </template>
       <template v-else-if="form.mode === 'import'">
         <el-form-item label="私钥文件" prop="privateKey">
-          <input type="file" @change="event => handleFileChange(event, 'privateKey')" />
+          <input type="file" @change="handlePrivateKeyFileChange" />
         </el-form-item>
         <el-form-item label="公钥文件" prop="publicKey">
-          <input type="file" @change="event => handleFileChange(event, 'publicKey')" />
+          <input type="file" @change="handlePublicKeyFileChange" />
         </el-form-item>
       </template>
       <el-form-item label="描述" prop="description">
@@ -132,6 +132,14 @@ const handleFileChange = (event: Event, field: 'privateKey' | 'publicKey') => {
     form.value[field] = String(reader.result || '');
   };
   reader.readAsText(file);
+};
+
+const handlePrivateKeyFileChange = (event: Event) => {
+  handleFileChange(event, 'privateKey');
+};
+
+const handlePublicKeyFileChange = (event: Event) => {
+  handleFileChange(event, 'publicKey');
 };
 
 const handleSubmit = async () => {

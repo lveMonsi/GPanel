@@ -227,7 +227,6 @@ func (s *SSHService) SyncSSHKeys() error {
 		return err
 	}
 
-	seen := make(map[string]struct{})
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -243,7 +242,6 @@ func (s *SSHService) SyncSSHKeys() error {
 		}
 		publicKeyPath := path + ".pub"
 		publicKey, _ := os.ReadFile(publicKeyPath)
-		seen[name] = struct{}{}
 
 		var existing models.SSHKey
 		err = global.DB.Where("name = ?", name).First(&existing).Error
@@ -275,7 +273,6 @@ func (s *SSHService) SyncSSHKeys() error {
 			return saveErr
 		}
 	}
-	_ = seen
 	return nil
 }
 
@@ -418,9 +415,6 @@ func (s *SSHService) buildSSHKeyModel(req dto.SSHKeyOperateReq, isUpdate bool) (
 		return nil, fmt.Errorf("privateKey is required")
 	}
 	if strings.TrimSpace(publicKey) == "" {
-		publicKey = derivePublicKey(privateKey)
-	}
-	if strings.TrimSpace(publicKey) == "" {
 		return nil, fmt.Errorf("publicKey is required")
 	}
 
@@ -478,14 +472,6 @@ func detectEncryptionMode(privateKey string, name string) string {
 	default:
 		return "ed25519"
 	}
-}
-
-func derivePublicKey(privateKey string) string {
-	trimmed := strings.TrimSpace(privateKey)
-	if trimmed == "" {
-		return ""
-	}
-	return ""
 }
 
 func generateSSHKeyPair(name, encryptionMode, passPhrase string) (string, string, error) {

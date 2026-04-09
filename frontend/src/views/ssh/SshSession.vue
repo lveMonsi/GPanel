@@ -57,7 +57,7 @@ const loadSessions = async () => {
   loading.value = true;
   try {
     const res = await getSSHSessions();
-    sessions.value = res.data || [];
+    sessions.value = res.data ?? [];
   } catch (e) {
     // ignore
   } finally {

@@ -27,7 +27,7 @@ const open = async () => {
   loading.value = true;
   try {
     const res = await getSSHFile('authKeys');
-    content.value = res.data || '';
+    content.value = res.data ?? '';
   } catch (error: any) {
     ElMessage.error(error.message || '加载认证密钥失败');
   } finally {

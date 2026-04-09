@@ -167,7 +167,9 @@ const rootLoginTagType = computed(() => rootLoginMap[sshInfo.value.permitRootLog
 const loadSSHInfo = async () => {
   try {
     const res = await getSSHInfo();
-    if (res.data) Object.assign(sshInfo.value, res.data);
+    if (res.data) {
+      Object.assign(sshInfo.value, res.data);
+    }
   } catch (e: any) {
     ElMessage.error(e.message || '获取SSH信息失败');
   }
@@ -177,7 +179,7 @@ const loadFullConfig = async () => {
   fileLoading.value = true;
   try {
     const res = await getSSHFile('sshdConf');
-    sshConfigContent.value = res.data || '';
+    sshConfigContent.value = res.data ?? '';
   } catch (error: any) {
     ElMessage.error(error.message || '加载配置文件失败');
   } finally {
