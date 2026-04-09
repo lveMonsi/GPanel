@@ -31,7 +31,7 @@ func main() {
 	}
 	defer global.CloseDB()
 
-	if err := global.DB.AutoMigrate(&models.Setting{}, &models.MonitorBase{}, &models.MonitorIO{}, &models.MonitorNetwork{}, &models.MonitorSetting{}); err != nil {
+	if err := global.DB.AutoMigrate(&models.Setting{}, &models.SSHKey{}, &models.MonitorBase{}, &models.MonitorIO{}, &models.MonitorNetwork{}, &models.MonitorSetting{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 

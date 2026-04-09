@@ -51,6 +51,34 @@ func (c *SSHController) UpdateSSHConfig(ctx *gin.Context) {
 	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/config")
 }
 
+func (c *SSHController) LoadSSHFile(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/file")
+}
+
+func (c *SSHController) UpdateSSHFile(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/file/update")
+}
+
+func (c *SSHController) SearchSSHKeys(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/keys/search")
+}
+
+func (c *SSHController) CreateSSHKey(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/keys")
+}
+
+func (c *SSHController) UpdateSSHKey(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/keys/update")
+}
+
+func (c *SSHController) DeleteSSHKeys(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/keys/delete")
+}
+
+func (c *SSHController) SyncSSHKeys(ctx *gin.Context) {
+	c.proxy(ctx, http.MethodPost, "/api/v1/ssh/keys/sync")
+}
+
 func (c *SSHController) GetSSHSessions(ctx *gin.Context) {
 	c.proxy(ctx, http.MethodGet, "/api/v1/ssh/sessions")
 }

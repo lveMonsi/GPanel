@@ -38,6 +38,52 @@ export interface SSHLogReq {
   info: string;
 }
 
+export interface SSHFileReq {
+  name: 'sshdConf' | 'authKeys';
+}
+
+export interface SSHFileUpdateReq {
+  key: 'sshdConf' | 'authKeys';
+  value: string;
+}
+
+export interface SSHKeyInfo {
+  id: number;
+  createdAt: string;
+  name: string;
+  mode: 'generate' | 'input' | 'import' | 'sync';
+  encryptionMode: 'ed25519' | 'ecdsa' | 'rsa' | 'dsa';
+  passPhrase: string;
+  description: string;
+  publicKey: string;
+  privateKey: string;
+}
+
+export interface SSHKeyOperate {
+  id?: number;
+  name: string;
+  mode: 'generate' | 'input' | 'import' | 'sync';
+  encryptionMode: 'ed25519' | 'ecdsa' | 'rsa' | 'dsa';
+  passPhrase: string;
+  description: string;
+  publicKey: string;
+  privateKey: string;
+}
+
+export interface SSHKeySearchReq {
+  page: number;
+  pageSize: number;
+}
+
+export interface SSHKeySearchRes {
+  total: number;
+  items: SSHKeyInfo[];
+}
+
+export interface SSHKeyDeleteReq {
+  ids: number[];
+}
+
 export interface ApiResponse<T = null> {
   code: number;
   message: string;

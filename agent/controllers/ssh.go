@@ -59,6 +59,100 @@ func (c *SSHController) UpdateSSHConfig(ctx *gin.Context) {
 	c.success(ctx, nil)
 }
 
+func (c *SSHController) LoadSSHFile(ctx *gin.Context) {
+	var req dto.SSHFileReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		c.fail(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	content, err := c.sshService.LoadSSHFile(req.Name)
+	if err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, content)
+}
+
+func (c *SSHController) UpdateSSHFile(ctx *gin.Context) {
+	var req dto.SSHFileUpdateReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		c.fail(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := c.sshService.UpdateSSHFile(req.Key, req.Value); err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, nil)
+}
+
+func (c *SSHController) SearchSSHKeys(ctx *gin.Context) {
+	var req dto.SSHKeySearchReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		c.fail(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 20
+	}
+	result, err := c.sshService.SearchSSHKeys(req.Page, req.PageSize)
+	if err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, result)
+}
+
+func (c *SSHController) CreateSSHKey(ctx *gin.Context) {
+	var req dto.SSHKeyOperateReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		c.fail(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := c.sshService.CreateSSHKey(req); err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, nil)
+}
+
+func (c *SSHController) UpdateSSHKey(ctx *gin.Context) {
+	var req dto.SSHKeyOperateReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		c.fail(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := c.sshService.UpdateSSHKey(req); err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, nil)
+}
+
+func (c *SSHController) DeleteSSHKeys(ctx *gin.Context) {
+	var req dto.SSHKeyDeleteReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		c.fail(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := c.sshService.DeleteSSHKeys(req.IDs); err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, nil)
+}
+
+func (c *SSHController) SyncSSHKeys(ctx *gin.Context) {
+	if err := c.sshService.SyncSSHKeys(); err != nil {
+		c.fail(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.success(ctx, nil)
+}
+
 func (c *SSHController) GetSSHSessions(ctx *gin.Context) {
 	sessions, err := c.sshService.GetSSHSessions()
 	if err != nil {
