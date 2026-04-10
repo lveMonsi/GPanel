@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -277,12 +278,62 @@ func (s *SSHService) SyncSSHKeys() error {
 }
 
 func (s *SSHService) GetSSHSessions(loginUser string) ([]dto.SSHSession, error) {
+	whoSessions, err := collectWhoSSHSessions(loginUser)
+	if err != nil {
+		return nil, err
+	}
+
+	hostByPID := collectSSHSocketHosts()
+	psSessions, err := collectSSHProcessSessions(loginUser, hostByPID)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionsByPID := make(map[int]dto.SSHSession, len(psSessions)+len(whoSessions))
+	for _, session := range psSessions {
+		if session.Terminal != "" {
+			if whoSession, ok := whoSessions[session.Terminal]; ok {
+				if session.LoginTime == "" {
+					session.LoginTime = whoSession.LoginTime
+				}
+				if session.Host == "" {
+					session.Host = whoSession.Host
+				}
+			}
+		}
+		sessionsByPID[session.PID] = session
+	}
+
+	for _, session := range whoSessions {
+		matched := false
+		for _, existing := range sessionsByPID {
+			if session.Terminal != "" && session.Terminal == existing.Terminal {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			sessionsByPID[session.PID] = session
+		}
+	}
+
+	sessions := make([]dto.SSHSession, 0, len(sessionsByPID))
+	for _, session := range sessionsByPID {
+		sessions = append(sessions, session)
+	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].PID > sessions[j].PID
+	})
+	return sessions, nil
+}
+
+func collectWhoSSHSessions(loginUser string) (map[string]dto.SSHSession, error) {
 	out, err := exec.Command("who", "-u").Output()
 	if err != nil {
 		return nil, err
 	}
 
-	var sessions []dto.SSHSession
+	sessions := make(map[string]dto.SSHSession)
 	re := regexp.MustCompile(`^(\S+)\s+(\S+)\s+(\S+\s+\S+)\s+\S+\s+(\d+)\s+\(([^)]+)\)`)
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
 	for scanner.Scan() {
@@ -294,15 +345,142 @@ func (s *SSHService) GetSSHSessions(loginUser string) ([]dto.SSHSession, error) 
 			continue
 		}
 		pid, _ := strconv.Atoi(m[4])
-		sessions = append(sessions, dto.SSHSession{
+		sessions[m[2]] = dto.SSHSession{
 			PID:       pid,
 			Username:  m[1],
 			Terminal:  m[2],
 			LoginTime: m[3],
 			Host:      m[5],
-		})
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 	return sessions, nil
+}
+
+func collectSSHProcessSessions(loginUser string, hostByPID map[int]string) ([]dto.SSHSession, error) {
+	out, err := exec.Command("ps", "-eo", "pid=,user=,tty=,args=").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var sessions []dto.SSHSession
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		username, terminal, ok := parseSSHDSessionCommand(strings.Join(fields[3:], " "))
+		if !ok {
+			continue
+		}
+		if loginUser != "" && !strings.Contains(username, loginUser) {
+			continue
+		}
+		if terminal == "?" {
+			terminal = ""
+		}
+		sessions = append(sessions, dto.SSHSession{
+			PID:       pid,
+			Username:  username,
+			Terminal:  terminal,
+			Host:      hostByPID[pid],
+			LoginTime: sshProcessStartTime(pid),
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return sessions, nil
+}
+
+func collectSSHSocketHosts() map[int]string {
+	out, err := exec.Command("ss", "-tnp").Output()
+	if err != nil {
+		return map[int]string{}
+	}
+
+	hostByPID := make(map[int]string)
+	pidRe := regexp.MustCompile(`pid=(\d+)`)
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, "ESTAB") || !strings.Contains(line, "sshd") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 6 {
+			continue
+		}
+		peerHost := parseSocketHost(fields[4])
+		if peerHost == "" {
+			continue
+		}
+		for _, match := range pidRe.FindAllStringSubmatch(line, -1) {
+			pid, err := strconv.Atoi(match[1])
+			if err == nil {
+				hostByPID[pid] = peerHost
+			}
+		}
+	}
+	return hostByPID
+}
+
+func parseSSHDSessionCommand(command string) (string, string, bool) {
+	if !strings.HasPrefix(command, "sshd: ") {
+		return "", "", false
+	}
+	session := strings.TrimSpace(strings.TrimPrefix(command, "sshd: "))
+	if session == "" || strings.Contains(session, "listener") || strings.Contains(session, "accepting connections") {
+		return "", "", false
+	}
+	if strings.Contains(session, "[priv]") || strings.Contains(session, "[net]") {
+		return "", "", false
+	}
+	parts := strings.SplitN(session, "@", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	username := strings.TrimSpace(parts[0])
+	terminal := strings.Fields(parts[1])
+	if username == "" || len(terminal) == 0 {
+		return "", "", false
+	}
+	return username, terminal[0], true
+}
+
+func sshProcessStartTime(pid int) string {
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "lstart=").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func parseSocketHost(address string) string {
+	address = strings.TrimSpace(address)
+	if address == "" || address == "*" {
+		return ""
+	}
+	if strings.HasPrefix(address, "[") {
+		if end := strings.Index(address, "]"); end > 1 {
+			address = address[1:end]
+		}
+	} else if index := strings.LastIndex(address, ":"); index > 0 {
+		address = address[:index]
+	}
+	address = strings.TrimPrefix(address, "::ffff:")
+	return address
 }
 
 func (s *SSHService) KillSSHSession(pid int) error {
