@@ -80,7 +80,11 @@ func (c *SSHController) SyncSSHKeys(ctx *gin.Context) {
 }
 
 func (c *SSHController) GetSSHSessions(ctx *gin.Context) {
-	c.proxy(ctx, http.MethodGet, "/api/v1/ssh/sessions")
+	path := "/api/v1/ssh/sessions"
+	if q := ctx.Request.URL.RawQuery; q != "" {
+		path += "?" + q
+	}
+	c.proxy(ctx, http.MethodGet, path)
 }
 
 func (c *SSHController) KillSSHSession(ctx *gin.Context) {

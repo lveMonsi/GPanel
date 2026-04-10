@@ -276,7 +276,7 @@ func (s *SSHService) SyncSSHKeys() error {
 	return nil
 }
 
-func (s *SSHService) GetSSHSessions() ([]dto.SSHSession, error) {
+func (s *SSHService) GetSSHSessions(loginUser string) ([]dto.SSHSession, error) {
 	out, err := exec.Command("who", "-u").Output()
 	if err != nil {
 		return nil, err
@@ -288,6 +288,9 @@ func (s *SSHService) GetSSHSessions() ([]dto.SSHSession, error) {
 	for scanner.Scan() {
 		m := re.FindStringSubmatch(scanner.Text())
 		if m == nil {
+			continue
+		}
+		if loginUser != "" && !strings.Contains(m[1], loginUser) {
 			continue
 		}
 		pid, _ := strconv.Atoi(m[4])

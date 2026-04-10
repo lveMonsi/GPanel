@@ -2,23 +2,27 @@
   <div class="ssh-session">
     <div class="toolbar">
       <el-input
-        v-model="searchUser"
-        placeholder="搜索用户"
+        v-model="loginUser"
+        placeholder="按用户名筛选"
         clearable
-        style="width: 200px"
-        @input="filterData"
-      />
-      <el-button :icon="Refresh" @click="loadSessions" style="margin-left: 8px">刷新</el-button>
+        style="width: 220px"
+        @clear="fetchSessions"
+        @keyup.enter="fetchSessions"
+      >
+        <template #append>
+          <el-button :icon="Search" @click="fetchSessions" />
+        </template>
+      </el-input>
     </div>
 
-    <el-table :data="filteredData" v-loading="loading" border stripe>
-      <el-table-column label="用户" prop="username" min-width="100" />
-      <el-table-column label="TTY" prop="terminal" min-width="80" />
-      <el-table-column label="登录IP" prop="host" min-width="140" />
-      <el-table-column label="登录时间" prop="loginTime" min-width="160" />
+    <el-table :data="sessions" v-loading="loading" border stripe>
+      <el-table-column label="用户" prop="username" />
+      <el-table-column label="TTY" prop="terminal" />
+      <el-table-column label="登录IP" prop="host" />
+      <el-table-column label="登录时间" prop="loginTime" min-width="120" />
       <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
-          <el-button type="danger" size="small" link @click="handleDisconnect(row)">
+          <el-button type="danger" size="small" link @click="disconnect(row.pid)">
             断开
           </el-button>
         </template>
@@ -28,58 +32,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Refresh } from '@element-plus/icons-vue';
+import { Search } from '@element-plus/icons-vue';
 import { getSSHSessions, killSSHSession } from '@/api/modules/ssh';
-
-interface SessionItem {
-  pid: number;
-  username: string;
-  terminal: string;
-  host: string;
-  loginTime: string;
-}
+import type { SSHSession } from '@/api/interface/ssh';
 
 const loading = ref(false);
-const searchUser = ref('');
-const sessions = ref<SessionItem[]>([]);
+const loginUser = ref('');
+const sessions = ref<SSHSession[]>([]);
+let timer: ReturnType<typeof setInterval> | null = null;
 
-const filteredData = computed(() =>
-  searchUser.value
-    ? sessions.value.filter((s) => s.username.includes(searchUser.value))
-    : sessions.value
-);
-
-const filterData = () => {};
-
-const loadSessions = async () => {
+const fetchSessions = async () => {
   loading.value = true;
   try {
-    const res = await getSSHSessions();
+    const res = await getSSHSessions(loginUser.value || undefined);
     sessions.value = res.data ?? [];
-  } catch (e) {
-    // ignore
+  } catch {
+    // 静默处理，轮询场景下避免刷屏
   } finally {
     loading.value = false;
   }
 };
 
-const handleDisconnect = async (row: SessionItem) => {
-  try {
-    await ElMessageBox.confirm(`确认断开用户 ${row.username} 的SSH连接吗?`, '确认操作', {
-      type: 'warning',
-    });
-    await killSSHSession(row.pid);
-    ElMessage.success('已断开连接');
-    await loadSessions();
-  } catch (e: any) {
-    if (e !== 'cancel') ElMessage.error(e.message || '操作失败');
+const startPolling = () => {
+  fetchSessions();
+  timer = setInterval(fetchSessions, 3000);
+};
+
+const stopPolling = () => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
   }
 };
 
+const disconnect = (pid: number) => {
+  ElMessageBox.confirm('是否断开此SSH连接？', '断开', {
+    confirmButtonText: '确认',
+    cancelButtonText: '取消',
+    type: 'info',
+  })
+    .then(async () => {
+      try {
+        await killSSHSession(pid);
+        ElMessage.success('操作成功');
+      } catch (e: any) {
+        ElMessage.error(e.message || '操作失败');
+      }
+    })
+    .catch(() => {});
+};
+
 onMounted(() => {
-  loadSessions();
+  startPolling();
+});
+
+onUnmounted(() => {
+  stopPolling();
 });
 </script>
 

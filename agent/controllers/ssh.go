@@ -154,7 +154,8 @@ func (c *SSHController) SyncSSHKeys(ctx *gin.Context) {
 }
 
 func (c *SSHController) GetSSHSessions(ctx *gin.Context) {
-	sessions, err := c.sshService.GetSSHSessions()
+	loginUser := ctx.Query("loginUser")
+	sessions, err := c.sshService.GetSSHSessions(loginUser)
 	if err != nil {
 		c.fail(ctx, http.StatusInternalServerError, err.Error())
 		return

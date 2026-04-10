@@ -43,8 +43,10 @@ export const deleteSSHKeys = (data: SSHKeyDeleteReq) =>
 export const syncSSHKeys = () =>
   request.post<ApiResponse>('/api/v1/agent/ssh/keys/sync').then(res => res.data);
 
-export const getSSHSessions = () =>
-  request.get<ApiResponse<SSHSession[]>>('/api/v1/agent/ssh/sessions').then(res => res.data);
+export const getSSHSessions = (loginUser?: string) => {
+  const params = loginUser ? { loginUser } : undefined;
+  return request.get<ApiResponse<SSHSession[]>>('/api/v1/agent/ssh/sessions', { params }).then(res => res.data);
+};
 
 export const killSSHSession = (pid: number) =>
   request.post<ApiResponse>('/api/v1/agent/ssh/sessions/kill', { pid }).then(res => res.data);
