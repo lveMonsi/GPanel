@@ -27,19 +27,38 @@ func NewSSHService() *SSHService {
 	return &SSHService{}
 }
 
-func sshServiceName() string {
-	for _, candidate := range []string{"sshd", "ssh"} {
-		out, err := exec.Command("systemctl", "show", candidate, "--property=Id", "--value").Output()
+func sshServiceUnit() string {
+	for _, candidate := range []string{"sshd.service", "ssh.service", "sshd", "ssh"} {
+		out, err := exec.Command("systemctl", "show", candidate, "--property=LoadState,FragmentPath,Id", "--value").Output()
 		if err != nil {
 			continue
 		}
-		serviceID := strings.TrimSpace(string(out))
-		if serviceID == "" {
+
+		parts := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if len(parts) != 3 {
 			continue
 		}
-		return strings.TrimSuffix(serviceID, ".service")
+		if parts[0] == "not-found" {
+			continue
+		}
+
+		fragmentPath := strings.TrimSpace(parts[1])
+		if fragmentPath != "" && fragmentPath != "/dev/null" {
+			if index := strings.LastIndex(fragmentPath, "/"); index >= 0 && index < len(fragmentPath)-1 {
+				return fragmentPath[index+1:]
+			}
+			return fragmentPath
+		}
+
+		serviceID := strings.TrimSpace(parts[2])
+		if serviceID != "" {
+			if strings.HasSuffix(serviceID, ".service") {
+				return serviceID
+			}
+			return serviceID + ".service"
+		}
 	}
-	return "sshd"
+	return "sshd.service"
 }
 
 func sshAutoStartEnabled(svc string) bool {
@@ -66,7 +85,7 @@ func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 		UseDNS:          "yes",
 	}
 
-	svc := sshServiceName()
+	svc := sshServiceUnit()
 	out, _ := exec.Command("systemctl", "is-active", svc).Output()
 	info.IsActive = strings.TrimSpace(string(out)) == "active"
 
@@ -110,7 +129,7 @@ func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 }
 
 func (s *SSHService) OperateSSH(operation string) error {
-	svc := sshServiceName()
+	svc := sshServiceUnit()
 	switch operation {
 	case "start", "stop", "restart":
 		output, err := exec.Command("systemctl", operation, svc).CombinedOutput()
@@ -119,24 +138,9 @@ func (s *SSHService) OperateSSH(operation string) error {
 		}
 		return nil
 	case "enable", "disable":
-		// 将 enable/disable 与 start/stop 拆开执行，避免 linked unit file
-		// 导致 --now 整体失败（linked unit file 拒绝 enable 但 start 本身是可以成功的）
 		output, err := exec.Command("systemctl", operation, svc).CombinedOutput()
 		if err != nil {
-			// linked unit file 无法直接 enable/disable，使用 --force 重试
-			forcedOutput, forcedErr := exec.Command("systemctl", operation, "--force", svc).CombinedOutput()
-			if forcedErr != nil {
-				return fmt.Errorf("systemctl %s %s failed: %s, %s; force retry failed: %s, %s", operation, svc, err, strings.TrimSpace(string(output)), forcedErr, strings.TrimSpace(string(forcedOutput)))
-			}
-		}
-		// 单独处理 --now 对应的 start/stop 操作
-		startStop := "start"
-		if operation == "disable" {
-			startStop = "stop"
-		}
-		output, err = exec.Command("systemctl", startStop, svc).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("systemctl %s %s failed: %s, %s", startStop, svc, err, strings.TrimSpace(string(output)))
+			return fmt.Errorf("systemctl %s %s failed: %s, %s", operation, svc, err, strings.TrimSpace(string(output)))
 		}
 		return nil
 	default:
@@ -569,7 +573,7 @@ func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SS
 	}
 
 	if len(lines) == 0 {
-		out, err := exec.Command("journalctl", "-u", "sshd", "--no-pager", "-n", "10000").Output()
+		out, err := exec.Command("journalctl", "-u", sshServiceUnit(), "--no-pager", "-n", "10000").Output()
 		if err == nil {
 			lines = strings.Split(string(out), "\n")
 		}
