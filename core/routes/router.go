@@ -168,6 +168,13 @@ func SetupRouter(r *gin.Engine) {
 				agent.POST("/firewall/forward", middleware.Auth(), firewallController.OperateForwardRule)
 				agent.GET("/firewall/install", middleware.Auth(), firewallController.InstallFirewall)
 				agent.GET("/firewall/uninstall", middleware.Auth(), firewallController.UninstallFirewall)
+
+				// 进程管理 API
+				processController, _ := controllers.NewProcessController()
+				agent.POST("/process/list", middleware.Auth(), processController.ListProcesses)
+				agent.GET("/process/:pid", middleware.Auth(), processController.GetProcessDetail)
+				agent.POST("/process/stop", middleware.Auth(), processController.StopProcess)
+				agent.POST("/process/net", middleware.Auth(), processController.ListNetConnections)
 			}
 
 			// 监控 API（代理到 Agent）

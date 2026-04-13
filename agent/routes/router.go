@@ -115,6 +115,16 @@ func SetupRouter(r *gin.Engine) {
 				ssh.POST("/logs", sshController.GetSSHLogs)
 			}
 
+			// 进程管理路由
+			processController := controllers.NewProcessController()
+			proc := v1.Group("/process")
+			{
+				proc.POST("/list", processController.ListProcesses)
+				proc.GET("/:pid", processController.GetProcessDetail)
+				proc.POST("/stop", processController.StopProcess)
+				proc.POST("/net", processController.ListNetConnections)
+			}
+
 			// 监控路由
 			monitorController := controllers.NewMonitorController()
 			monitor := v1.Group("/monitor")
