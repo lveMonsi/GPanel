@@ -93,11 +93,22 @@ func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 func (s *SSHService) OperateSSH(operation string) error {
 	svc := sshServiceName()
 	switch operation {
-	case "start", "stop", "restart", "enable", "disable":
+	case "start", "stop", "restart":
 		output, err := exec.Command("systemctl", operation, svc).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("systemctl %s %s failed: %s, %s", operation, svc, err, strings.TrimSpace(string(output)))
 		}
+		return nil
+	case "enable", "disable":
+		output, err := exec.Command("systemctl", operation, "--now", svc).CombinedOutput()
+		if err != nil {
+			// linked unit file 无法直接 enable/disable，使用 --force 重试
+			output2, err2 := exec.Command("systemctl", operation, "--now", "--force", svc).CombinedOutput()
+			if err2 != nil {
+				return fmt.Errorf("systemctl %s %s failed: %s, %s", operation, svc, err2, strings.TrimSpace(string(output2)))
+			}
+		}
+		_ = output
 		return nil
 	default:
 		return fmt.Errorf("invalid operation: %s", operation)
