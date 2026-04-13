@@ -28,7 +28,9 @@ func NewSSHService() *SSHService {
 }
 
 func sshServiceName() string {
-	if err := exec.Command("systemctl", "is-active", "--quiet", "sshd").Run(); err == nil {
+	// Use list-unit-files to detect the service name regardless of whether it is running
+	out, err := exec.Command("systemctl", "list-unit-files", "sshd.service", "--no-legend").Output()
+	if err == nil && strings.TrimSpace(string(out)) != "" {
 		return "sshd"
 	}
 	return "ssh"
@@ -92,7 +94,11 @@ func (s *SSHService) OperateSSH(operation string) error {
 	svc := sshServiceName()
 	switch operation {
 	case "start", "stop", "restart", "enable", "disable":
-		return exec.Command("systemctl", operation, svc).Run()
+		output, err := exec.Command("systemctl", operation, svc).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemctl %s %s failed: %s, %s", operation, svc, err, strings.TrimSpace(string(output)))
+		}
+		return nil
 	default:
 		return fmt.Errorf("invalid operation: %s", operation)
 	}
