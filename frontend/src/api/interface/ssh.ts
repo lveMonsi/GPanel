@@ -15,6 +15,7 @@ export interface SSHSession {
   terminal: string;
   host: string;
   loginTime: string;
+  source: string;
 }
 
 export interface SSHLogItem {

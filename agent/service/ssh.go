@@ -297,6 +297,7 @@ func (s *SSHService) GetSSHSessions(loginUser string) ([]dto.SSHSession, error) 
 
 	sessionsByPID := make(map[int]dto.SSHSession, len(psSessions)+len(whoSessions))
 	for _, session := range psSessions {
+		session.Source = "system"
 		if session.Terminal != "" {
 			if whoSession, ok := whoSessions[session.Terminal]; ok {
 				if session.LoginTime == "" {
@@ -311,6 +312,7 @@ func (s *SSHService) GetSSHSessions(loginUser string) ([]dto.SSHSession, error) 
 	}
 
 	for _, session := range whoSessions {
+		session.Source = "system"
 		matched := false
 		for _, existing := range sessionsByPID {
 			if session.Terminal != "" && session.Terminal == existing.Terminal {
@@ -327,6 +329,22 @@ func (s *SSHService) GetSSHSessions(loginUser string) ([]dto.SSHSession, error) 
 	for _, session := range sessionsByPID {
 		sessions = append(sessions, session)
 	}
+
+	// 合并 WebSocket SSH 会话
+	for _, ws := range global.GetWsSSHSessions() {
+		if loginUser != "" && !strings.Contains(ws.Username, loginUser) {
+			continue
+		}
+		sessions = append(sessions, dto.SSHSession{
+			PID:       int(ws.ID),
+			Username:  ws.Username,
+			Terminal:  "websocket",
+			Host:      fmt.Sprintf("%s:%d", ws.Host, ws.Port),
+			LoginTime: ws.LoginTime,
+			Source:    "websocket",
+		})
+	}
+
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].PID > sessions[j].PID
 	})
@@ -492,6 +510,10 @@ func parseSocketHost(address string) string {
 func (s *SSHService) KillSSHSession(pid int) error {
 	if pid <= 0 {
 		return fmt.Errorf("invalid pid")
+	}
+	// 先尝试关闭 WebSocket SSH 会话
+	if global.CloseWsSSHSession(int64(pid)) {
+		return nil
 	}
 	return exec.Command("kill", "-9", strconv.Itoa(pid)).Run()
 }

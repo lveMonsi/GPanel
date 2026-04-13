@@ -16,6 +16,12 @@
     </div>
 
     <el-table :data="sessions" v-loading="loading" border stripe>
+      <el-table-column label="来源" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="row.source === 'websocket'" type="success" size="small">面板终端</el-tag>
+          <el-tag v-else type="info" size="small">SSH</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="用户" prop="username" />
       <el-table-column label="TTY" prop="terminal" />
       <el-table-column label="登录IP" prop="host" />

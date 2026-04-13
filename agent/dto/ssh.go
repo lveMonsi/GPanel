@@ -17,6 +17,7 @@ type SSHSession struct {
 	Terminal  string `json:"terminal"`
 	Host      string `json:"host"`
 	LoginTime string `json:"loginTime"`
+	Source    string `json:"source"`
 }
 
 type SSHLogItem struct {

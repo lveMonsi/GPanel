@@ -208,6 +208,12 @@ func (tc *TerminalController) TerminalSSH(c *gin.Context) {
 	}
 	defer client.Close()
 
+	// 注册 WebSocket SSH 会话
+	sessionID := global.RegisterWsSSHSession(connectReq.User, connectReq.Host, connectReq.Port, func() {
+		wsConn.Close()
+	})
+	defer global.UnregisterWsSSHSession(sessionID)
+
 	// 创建 SSH 会话
 	sws, err := terminal.NewLogicSshWsSession(cols, rows, client.Client, wsConn, "")
 	if err != nil {
