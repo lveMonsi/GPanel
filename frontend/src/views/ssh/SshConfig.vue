@@ -201,6 +201,8 @@ const handleAutoStart = async (val: boolean) => {
   try {
     await operateSSH(val ? 'enable' : 'disable');
     ElMessage.success('设置成功');
+    // 重新拉取状态，确保开关与 systemctl 实际状态同步（linked unit file 等场景）
+    await loadSSHInfo();
   } catch (e: any) {
     ElMessage.error(e.message || '设置失败');
     await loadSSHInfo();

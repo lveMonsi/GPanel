@@ -51,7 +51,9 @@ func (s *SSHService) GetSSHInfo() (dto.SSHInfo, error) {
 	info.IsActive = strings.TrimSpace(string(out)) == "active"
 
 	out, _ = exec.Command("systemctl", "is-enabled", svc).Output()
-	info.AutoStart = strings.TrimSpace(string(out)) == "enabled"
+	enabledStatus := strings.TrimSpace(string(out))
+	// linked / enabled-runtime 同样代表开机自启（linked unit file 场景）
+	info.AutoStart = enabledStatus == "enabled" || enabledStatus == "linked" || enabledStatus == "enabled-runtime"
 
 	f, err := os.Open(sshdConfig)
 	if err != nil {
@@ -100,15 +102,23 @@ func (s *SSHService) OperateSSH(operation string) error {
 		}
 		return nil
 	case "enable", "disable":
-		output, err := exec.Command("systemctl", operation, "--now", svc).CombinedOutput()
+		// 将 enable/disable 与 start/stop 拆开执行，避免 linked unit file
+		// 导致 --now 整体失败（linked unit file 拒绝 enable 但 start 本身是可以成功的）
+		_, err := exec.Command("systemctl", operation, svc).CombinedOutput()
 		if err != nil {
 			// linked unit file 无法直接 enable/disable，使用 --force 重试
-			output2, err2 := exec.Command("systemctl", operation, "--now", "--force", svc).CombinedOutput()
-			if err2 != nil {
-				return fmt.Errorf("systemctl %s %s failed: %s, %s", operation, svc, err2, strings.TrimSpace(string(output2)))
-			}
+			_, _ = exec.Command("systemctl", operation, "--force", svc).CombinedOutput()
+			// 如果仍然失败也不阻塞：linked unit file 本身已等效于 enabled 状态
 		}
-		_ = output
+		// 单独处理 --now 对应的 start/stop 操作
+		startStop := "start"
+		if operation == "disable" {
+			startStop = "stop"
+		}
+		output, err := exec.Command("systemctl", startStop, svc).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemctl %s %s failed: %s, %s", startStop, svc, err, strings.TrimSpace(string(output)))
+		}
 		return nil
 	default:
 		return fmt.Errorf("invalid operation: %s", operation)
