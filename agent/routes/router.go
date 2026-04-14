@@ -142,6 +142,18 @@ func SetupRouter(r *gin.Engine) {
 				cronjobs.POST("/next-times", cronjobController.GetNextExecTimes)
 			}
 
+			// 日志管理路由
+			logController := controllers.NewLogController()
+			logs := v1.Group("/logs")
+			{
+				logs.POST("/operation/create", logController.CreateOperationLog)
+				logs.POST("/operation/search", logController.SearchOperationLogs)
+				logs.POST("/operation/clean", logController.CleanOperationLogs)
+				logs.GET("/operation/stats", logController.GetOperationLogStats)
+				logs.POST("/system/search", logController.SearchSystemLogs)
+				logs.GET("/system/info", logController.GetSystemLogInfo)
+			}
+
 			// 监控路由
 			monitorController := controllers.NewMonitorController()
 			monitor := v1.Group("/monitor")

@@ -40,6 +40,7 @@ func main() {
 		&models.MonitorSetting{},
 		&models.Cronjob{},
 		&models.JobRecord{},
+		&models.OperationLog{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}

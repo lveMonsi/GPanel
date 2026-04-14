@@ -71,6 +71,7 @@ func SetupRouter(r *gin.Engine) {
 	SetupFrontend(r)
 
 	api := r.Group("/api")
+	api.Use(middleware.OperationLog())
 	{
 		v1 := api.Group("/v1")
 		{
@@ -242,6 +243,17 @@ func SetupRouter(r *gin.Engine) {
 				cronjobs.GET("/records/:id/log", middleware.Auth(), cronjobController.GetRecordLog)
 				cronjobs.POST("/records/clean", middleware.Auth(), cronjobController.CleanRecords)
 				cronjobs.POST("/next-times", middleware.Auth(), cronjobController.GetNextExecTimes)
+			}
+
+			// 日志管理 API（代理到 Agent）
+			logController, _ := controllers.NewLogController()
+			logs := v1.Group("/logs")
+			{
+				logs.POST("/operation/search", middleware.Auth(), logController.SearchOperationLogs)
+				logs.POST("/operation/clean", middleware.Auth(), logController.CleanOperationLogs)
+				logs.GET("/operation/stats", middleware.Auth(), logController.GetOperationLogStats)
+				logs.POST("/system/search", middleware.Auth(), logController.SearchSystemLogs)
+				logs.GET("/system/info", middleware.Auth(), logController.GetSystemLogInfo)
 			}
 
 			// 快速命令 API
