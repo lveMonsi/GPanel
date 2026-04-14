@@ -27,30 +27,45 @@ func NewSSHService() *SSHService {
 	return &SSHService{}
 }
 
+func systemctlShowProperties(unit string, properties ...string) map[string]string {
+	args := []string{"show", unit}
+	for _, property := range properties {
+		args = append(args, "--property="+property)
+	}
+
+	output, err := exec.Command("systemctl", args...).Output()
+	if err != nil {
+		return nil
+	}
+
+	values := make(map[string]string, len(properties))
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		values[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+
+	return values
+}
+
 func sshServiceUnit() string {
 	for _, candidate := range []string{"sshd.service", "ssh.service", "sshd", "ssh"} {
-		out, err := exec.Command("systemctl", "show", candidate, "--property=LoadState,FragmentPath,Id", "--value").Output()
-		if err != nil {
+		properties := systemctlShowProperties(candidate, "LoadState", "Id")
+		if len(properties) == 0 {
+			continue
+		}
+		if properties["LoadState"] == "not-found" {
 			continue
 		}
 
-		parts := strings.Split(strings.TrimSpace(string(out)), "\n")
-		if len(parts) != 3 {
-			continue
-		}
-		if parts[0] == "not-found" {
-			continue
-		}
-
-		fragmentPath := strings.TrimSpace(parts[1])
-		if fragmentPath != "" && fragmentPath != "/dev/null" {
-			if index := strings.LastIndex(fragmentPath, "/"); index >= 0 && index < len(fragmentPath)-1 {
-				return fragmentPath[index+1:]
-			}
-			return fragmentPath
-		}
-
-		serviceID := strings.TrimSpace(parts[2])
+		serviceID := properties["Id"]
 		if serviceID != "" {
 			if strings.HasSuffix(serviceID, ".service") {
 				return serviceID
