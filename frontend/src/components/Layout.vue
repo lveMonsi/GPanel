@@ -30,7 +30,7 @@
           <el-icon class="nav-icon"><List /></el-icon>
           <span class="nav-text">进程管理</span>
         </router-link>
-        <router-link to="/scripts" class="nav-item" active-class="active">
+        <router-link to="/cronjob" class="nav-item" active-class="active">
           <el-icon class="nav-icon"><Document /></el-icon>
           <span class="nav-text">定时任务</span>
         </router-link>

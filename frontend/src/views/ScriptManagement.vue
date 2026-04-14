@@ -215,8 +215,8 @@ const loadData = async () => {
       type: searchType.value,
       status: searchStatus.value
     })
-    jobs.value = res.data.items || []
-    pagination.total = res.data.total || 0
+    jobs.value = res.data?.data?.items || []
+    pagination.total = res.data?.data?.total || 0
   } catch {
     ElMessage.error('加载任务列表失败')
   } finally {

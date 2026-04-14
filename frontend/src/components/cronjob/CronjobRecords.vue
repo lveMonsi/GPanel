@@ -211,8 +211,8 @@ const loadRecords = async (resetSelection: boolean) => {
       cronjobId: jobId.value,
       status: searchStatus.value
     })
-    records.value = res.data.items || []
-    total.value = res.data.total || 0
+    records.value = res.data?.data?.items || []
+    total.value = res.data?.data?.total || 0
 
     if (resetSelection && records.value.length > 0) {
       selectRecord(records.value[0])

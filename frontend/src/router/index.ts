@@ -133,7 +133,7 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/scripts',
+    path: '/cronjob',
     name: 'ScriptManagement',
     component: Layout,
     meta: { requiresAuth: true },
