@@ -366,9 +366,18 @@ const formatTime = (date: string) => {
   return formatAxisTime(date)
 }
 
-const formatBytes = (kb: number | string) => {
+const formatBytes = (bytes: number | string) => {
+  const value = Number(bytes)
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
+  if (value < 1024) return `${value.toFixed(2)} B`
+  if (value < 1048576) return `${(value / 1024).toFixed(2)} KB`
+  if (value < 1073741824) return `${(value / 1048576).toFixed(2)} MB`
+  return `${(value / 1073741824).toFixed(2)} GB`
+}
+
+const formatKilobytes = (kb: number | string) => {
   const value = Number(kb)
-  if (!Number.isFinite(value)) return '0.00 KB'
+  if (!Number.isFinite(value) || value <= 0) return '0.00 KB'
   if (value < 1024) return `${value.toFixed(2)} KB`
   if (value < 1048576) return `${(value / 1024).toFixed(2)} MB`
   return `${(value / 1048576).toFixed(2)} GB`
@@ -541,7 +550,7 @@ const renderChart = (type: string, data: any[]) => {
           let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
           params.forEach((p: any) => {
             if (p.seriesName === '读取' || p.seriesName === '写入') {
-              html += `${p.marker} ${p.seriesName}: ${formatBytes(p.data)}<br/>`
+              html += `${p.marker} ${p.seriesName}: ${formatKilobytes(p.data)}<br/>`
             } else if (p.seriesName === '读写次数') {
               html += `${p.marker} ${p.seriesName}: ${p.data} 次/s<br/>`
             } else if (p.seriesName === '读写时间') {
@@ -572,7 +581,7 @@ const renderChart = (type: string, data: any[]) => {
         formatter: (params: any) => {
           let html = `<div style="padding:5px"><b>${params[0].name}</b><br/>`
           params.forEach((p: any) => {
-            html += `${p.marker} ${p.seriesName}: ${formatBytes(p.data)}<br/>`
+            html += `${p.marker} ${p.seriesName}: ${formatKilobytes(p.data)}<br/>`
           })
           return html + '</div>'
         }
