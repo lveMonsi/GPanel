@@ -1056,8 +1056,8 @@ onBeforeUnmount(() => {
   --editor-toolbar-bg: var(--el-fill-color-lighter);
   --editor-footer-bg: var(--el-fill-color-lighter);
   --editor-border-color: var(--el-border-color-lighter);
-  --editor-text-color: var(--el-text-color-regular);
-  --editor-text-secondary: var(--el-text-color-secondary);
+  --editor-text-color: var(--text-primary, var(--el-text-color-primary));
+  --editor-text-secondary: var(--text-secondary, var(--el-text-color-regular));
   --editor-primary: var(--el-color-primary);
 }
 
@@ -1123,13 +1123,22 @@ onBeforeUnmount(() => {
 }
 
 .header-btn {
+  min-width: 32px !important;
+  min-height: 32px !important;
   padding: 6px !important;
   font-size: 18px !important;
-  color: var(--editor-text-secondary) !important;
+  color: var(--editor-text-color) !important;
+  background-color: transparent !important;
+  border: 1px solid transparent !important;
+
+  :deep(.el-icon),
+  :deep(i) {
+    color: inherit !important;
+  }
   
   &:hover {
     color: var(--editor-primary) !important;
-    background-color: var(--el-fill-color-light) !important;
+    background-color: var(--el-fill-color) !important;
   }
 }
 
@@ -1318,9 +1327,9 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
   cursor: pointer;
   padding: 8px 2px;
-  background-color: var(--el-fill-color);
+  background-color: var(--el-fill-color-lighter);
   border-radius: 4px 0 0 4px;
-  color: var(--editor-text-secondary);
+  color: var(--editor-text-color);
   transition: all 0.2s;
   
   &:hover {
@@ -1372,6 +1381,7 @@ onBeforeUnmount(() => {
   height: 28px;
   line-height: 28px;
   padding: 0 12px !important;
+  color: var(--editor-text-color) !important;
   
   &:hover {
     color: var(--editor-primary) !important;
@@ -1382,6 +1392,15 @@ onBeforeUnmount(() => {
     background-color: var(--el-bg-color);
     border-bottom: 2px solid var(--editor-primary);
   }
+}
+
+.tabs-container :deep(.el-tabs__item .is-icon-close) {
+  color: var(--editor-text-secondary) !important;
+}
+
+.tabs-container :deep(.el-tabs__item .is-icon-close:hover) {
+  color: var(--editor-primary) !important;
+  background-color: var(--el-fill-color) !important;
 }
 
 .tab-label {
@@ -1411,9 +1430,9 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
   cursor: pointer;
   padding: 16px 4px;
-  background-color: var(--el-fill-color);
+  background-color: var(--el-fill-color-lighter);
   border-radius: 0 4px 4px 0;
-  color: var(--editor-text-secondary);
+  color: var(--editor-text-color);
   z-index: 10;
   transition: all 0.2s;
   
@@ -1471,7 +1490,7 @@ onBeforeUnmount(() => {
 }
 
 .footer-link {
-  color: var(--editor-text-secondary);
+  color: var(--editor-text-color);
   font-size: 12px;
   
   &:hover {
@@ -1514,5 +1533,7 @@ onBeforeUnmount(() => {
   --editor-toolbar-bg: #252526;
   --editor-footer-bg: #252526;
   --editor-border-color: #3c3c3c;
+  --editor-text-color: #e5eaf3;
+  --editor-text-secondary: #cfd3dc;
 }
 </style>

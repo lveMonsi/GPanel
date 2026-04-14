@@ -87,7 +87,9 @@ const handleLogout = () => {
 
 .sidebar {
   width: 200px;
-  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+  background:
+    linear-gradient(180deg, rgba(35, 63, 79, 0.16) 0%, rgba(35, 63, 79, 0.24) 100%),
+    linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
   display: flex;
   flex-direction: column;
@@ -137,7 +139,7 @@ const handleLogout = () => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 1rem;
-  color: white;
+  color: rgba(255, 255, 255, 0.96);
   text-decoration: none;
   transition: all 0.2s;
   border-radius: var(--radius-sm);
@@ -149,17 +151,17 @@ const handleLogout = () => {
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .nav-item.active {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.24);
   font-weight: 500;
 }
 
 .nav-icon {
   font-size: 1rem;
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .nav-text {

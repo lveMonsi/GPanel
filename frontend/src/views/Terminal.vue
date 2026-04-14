@@ -126,10 +126,11 @@ onBeforeUnmount(() => {
 }
 
 .tab-radio-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background-color: var(--primary);
-  border-color: var(--primary);
-  color: white;
-  box-shadow: var(--shadow-sm);
+  background-color: var(--primary-light);
+  border-color: var(--primary-dark);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(90, 184, 214, 0.24);
+  font-weight: 600;
 }
 
 .tab-radio-group :deep(.el-radio-button:first-child .el-radio-button__inner) {

@@ -1129,7 +1129,7 @@ onMounted(() => {
 
 .breadcrumb-separator {
   margin: 0 8px;
-  color: #909399;
+  color: #606266;
 }
 
 .path-segment {
@@ -1170,7 +1170,7 @@ onMounted(() => {
 
 .action-bar-right {
   font-size: 14px;
-  color: #909399;
+  color: #606266;
 }
 
 .search-input {
@@ -1343,7 +1343,7 @@ onMounted(() => {
 .paste-info {
   margin-left: 8px;
   font-size: 13px;
-  color: #909399;
+  color: #606266;
 }
 
 .paste-badge {
