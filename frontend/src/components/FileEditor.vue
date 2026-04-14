@@ -16,11 +16,14 @@
           <el-button
             v-if="!isMobile"
             class="header-btn"
-            :icon="isFullscreen ? 'FullScreen' : 'FullScreen'"
             text
             @click="toggleFullscreen"
-          ></el-button>
-          <el-button class="header-btn close-btn" :icon="'Close'" text @click="handleClose"></el-button>
+          >
+            <el-icon><FullScreen /></el-icon>
+          </el-button>
+          <el-button class="header-btn close-btn" text @click="handleClose">
+            <el-icon><Close /></el-icon>
+          </el-button>
         </div>
       </div>
     </template>
@@ -335,6 +338,8 @@ import {
   StarFilled,
   DArrowLeft,
   DArrowRight,
+  FullScreen,
+  Close,
 } from '@element-plus/icons-vue';
 import { fileApi } from '@/api/modules/file';
 import type * as Monaco from 'monaco-editor';
@@ -1123,6 +1128,12 @@ onBeforeUnmount(() => {
 }
 
 .header-btn {
+  --el-button-text-color: var(--editor-text-color);
+  --el-button-hover-text-color: var(--editor-primary);
+  --el-button-bg-color: transparent;
+  --el-button-hover-bg-color: var(--el-fill-color);
+  --el-button-border-color: transparent;
+  --el-button-hover-border-color: transparent;
   min-width: 32px !important;
   min-height: 32px !important;
   padding: 6px !important;
@@ -1132,8 +1143,11 @@ onBeforeUnmount(() => {
   border: 1px solid transparent !important;
 
   :deep(.el-icon),
-  :deep(i) {
+  :deep(i),
+  :deep(svg) {
     color: inherit !important;
+    fill: currentColor;
+    stroke: currentColor;
   }
   
   &:hover {
@@ -1143,6 +1157,7 @@ onBeforeUnmount(() => {
 }
 
 .close-btn:hover {
+  --el-button-hover-text-color: var(--el-color-danger);
   color: var(--el-color-danger) !important;
 }
 
