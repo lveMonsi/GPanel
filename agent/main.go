@@ -31,12 +31,30 @@ func main() {
 	}
 	defer global.CloseDB()
 
-	if err := global.DB.AutoMigrate(&models.Setting{}, &models.SSHKey{}, &models.MonitorBase{}, &models.MonitorIO{}, &models.MonitorNetwork{}, &models.MonitorSetting{}); err != nil {
+	if err := global.DB.AutoMigrate(
+		&models.Setting{},
+		&models.SSHKey{},
+		&models.MonitorBase{},
+		&models.MonitorIO{},
+		&models.MonitorNetwork{},
+		&models.MonitorSetting{},
+		&models.Cronjob{},
+		&models.JobRecord{},
+	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	// 初始化日志
 	global.InitLogger()
+
+	// 初始化计划任务调度器
+	global.InitCron()
+	cronjobSvc := service.NewCronjobService()
+	if err := cronjobSvc.StartAllEnabled(); err != nil {
+		log.Printf("Warning: Failed to start cronjobs: %v", err)
+	}
+	global.Cron.Start()
+	defer global.Cron.Stop()
 
 	// 启动监控调度器
 	service.StartMonitorScheduler()

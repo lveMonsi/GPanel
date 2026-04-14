@@ -227,6 +227,23 @@ func SetupRouter(r *gin.Engine) {
 				sessionHistories.DELETE("/:id", middleware.Auth(), controllers.DeleteSessionHistory)
 			}
 
+			// 计划任务 API（代理到 Agent）
+			cronjobController, _ := controllers.NewCronjobController()
+			cronjobs := v1.Group("/cronjobs")
+			{
+				cronjobs.POST("", middleware.Auth(), cronjobController.Create)
+				cronjobs.POST("/update", middleware.Auth(), cronjobController.Update)
+				cronjobs.POST("/delete", middleware.Auth(), cronjobController.Delete)
+				cronjobs.POST("/search", middleware.Auth(), cronjobController.Search)
+				cronjobs.POST("/toggle", middleware.Auth(), cronjobController.Toggle)
+				cronjobs.POST("/handle", middleware.Auth(), cronjobController.HandleOnce)
+				cronjobs.POST("/stop", middleware.Auth(), cronjobController.StopRunning)
+				cronjobs.POST("/records/search", middleware.Auth(), cronjobController.SearchRecords)
+				cronjobs.GET("/records/:id/log", middleware.Auth(), cronjobController.GetRecordLog)
+				cronjobs.POST("/records/clean", middleware.Auth(), cronjobController.CleanRecords)
+				cronjobs.POST("/next-times", middleware.Auth(), cronjobController.GetNextExecTimes)
+			}
+
 			// 快速命令 API
 			quickCommandController := controllers.NewQuickCommandController()
 			quickCommands := v1.Group("/quick-commands")

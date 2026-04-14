@@ -32,7 +32,7 @@
         </router-link>
         <router-link to="/scripts" class="nav-item" active-class="active">
           <el-icon class="nav-icon"><Document /></el-icon>
-          <span class="nav-text">脚本管理</span>
+          <span class="nav-text">定时任务</span>
         </router-link>
         <router-link to="/logs" class="nav-item" active-class="active">
           <el-icon class="nav-icon"><Document /></el-icon>

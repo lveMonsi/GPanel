@@ -125,6 +125,23 @@ func SetupRouter(r *gin.Engine) {
 				proc.POST("/net", processController.ListNetConnections)
 			}
 
+			// 计划任务路由
+			cronjobController := controllers.NewCronjobController()
+			cronjobs := v1.Group("/cronjobs")
+			{
+				cronjobs.POST("", cronjobController.Create)
+				cronjobs.POST("/update", cronjobController.Update)
+				cronjobs.POST("/delete", cronjobController.Delete)
+				cronjobs.POST("/search", cronjobController.Search)
+				cronjobs.POST("/toggle", cronjobController.Toggle)
+				cronjobs.POST("/handle", cronjobController.HandleOnce)
+				cronjobs.POST("/stop", cronjobController.StopRunning)
+				cronjobs.POST("/records/search", cronjobController.SearchRecords)
+				cronjobs.GET("/records/:id/log", cronjobController.GetRecordLog)
+				cronjobs.POST("/records/clean", cronjobController.CleanRecords)
+				cronjobs.POST("/next-times", cronjobController.GetNextExecTimes)
+			}
+
 			// 监控路由
 			monitorController := controllers.NewMonitorController()
 			monitor := v1.Group("/monitor")
