@@ -598,14 +598,27 @@ func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SS
 	failedRe := regexp.MustCompile(`Failed (password|publickey|keyboard-interactive) for (?:invalid user )?(\S+) from (\S+) port (\d+)`)
 	invalidRe := regexp.MustCompile(`Invalid user (\S+) from (\S+) port (\d+)`)
 	dateRe := regexp.MustCompile(`^(\w+\s+\d+\s+\d+:\d+:\d+)`)
+	journalctlDateRe := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})`)
+
+	currentYear := time.Now().Year()
+	parseLogDate := func(line string) string {
+		if m := journalctlDateRe.FindStringSubmatch(line); m != nil {
+			return m[1]
+		}
+		if m := dateRe.FindStringSubmatch(line); m != nil {
+			parsed, err := time.Parse("Jan 2 15:04:05 2006", m[1]+fmt.Sprintf(" %d", currentYear))
+			if err == nil {
+				return parsed.Format("2006-01-02 15:04:05")
+			}
+			return m[1]
+		}
+		return ""
+	}
 
 	var items []dto.SSHLogItem
 	for _, line := range lines {
 		var item dto.SSHLogItem
-		date := ""
-		if m := dateRe.FindStringSubmatch(line); m != nil {
-			date = m[1]
-		}
+		date := parseLogDate(line)
 		if m := acceptedRe.FindStringSubmatch(line); m != nil {
 			item = dto.SSHLogItem{Date: date, AuthMode: m[1], User: m[2], Address: m[3], Port: m[4], Status: "success"}
 		} else if m := failedRe.FindStringSubmatch(line); m != nil {
