@@ -2,9 +2,9 @@
 
 # GPanel 管理脚本
 # 使用方法:
-#   安装最新版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/main/gpanel.sh | sudo bash -s -- install
-#   安装指定版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/main/gpanel.sh | sudo bash -s -- install v1.0.0
-#   国内镜像安装: curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/lveMonsi/GPanel/main/gpanel.sh | sudo bash -s -- install
+#   安装最新版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install
+#   安装指定版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install v1.0.0
+#   国内镜像安装: curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install
 #   更新到最新:   sudo ./gpanel.sh update
 #   更新到指定:   sudo ./gpanel.sh update v1.0.0
 #   卸载:         sudo ./gpanel.sh uninstall

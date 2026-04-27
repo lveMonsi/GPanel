@@ -138,13 +138,13 @@ jobs:
             #### 使用安装脚本（推荐）
             
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
             ```
             
             #### 国内镜像安装（加速）
             
             ```bash
-            curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
+            curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/${{ github.repository }}/master/gpanel.sh | sudo bash -s -- install ${{ steps.build_info.outputs.version }}
             ```
             
             #### 手动安装

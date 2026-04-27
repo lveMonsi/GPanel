@@ -156,7 +156,7 @@ jobs:
           
           可以使用管理脚本安装预发布版本：
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/gpanel.sh | sudo bash -s -- install-pre
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/gpanel.sh | sudo bash -s -- install-pre
           ```
           
           ### 更新日志
