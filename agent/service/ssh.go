@@ -21,6 +21,11 @@ import (
 
 const sshdConfig = "/etc/ssh/sshd_config"
 
+var (
+	sshLogISODateRe    = regexp.MustCompile(`(?i)(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`)
+	sshLogSyslogDateRe = regexp.MustCompile(`\b([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\b`)
+)
+
 type SSHService struct{}
 
 func NewSSHService() *SSHService {
@@ -577,6 +582,49 @@ func (s *SSHService) KillSSHSession(pid int) error {
 	return exec.Command("kill", "-9", strconv.Itoa(pid)).Run()
 }
 
+func parseSSHLogDate(line string, now time.Time) string {
+	line = strings.TrimSpace(line)
+	if match := sshLogISODateRe.FindStringSubmatch(line); match != nil {
+		value := match[1]
+		layouts := []string{
+			time.RFC3339Nano,
+			"2006-01-02T15:04:05",
+			"2006-01-02 15:04:05.999999999",
+			"2006-01-02 15:04:05",
+		}
+		for _, layout := range layouts {
+			var parsed time.Time
+			var err error
+			if strings.Contains(layout, "Z07") {
+				parsed, err = time.Parse(layout, value)
+			} else {
+				parsed, err = time.ParseInLocation(layout, value, now.Location())
+			}
+			if err == nil {
+				return parsed.Format("2006-01-02 15:04:05")
+			}
+		}
+	}
+
+	if match := sshLogSyslogDateRe.FindStringSubmatch(line); match != nil {
+		value := match[1]
+		year := now.Year()
+		parsed, err := time.ParseInLocation("Jan 2 15:04:05 2006", fmt.Sprintf("%s %d", value, year), now.Location())
+		if err != nil {
+			return ""
+		}
+		// Rotated logs commonly contain the previous year's December entries
+		// while the current date is in January, and vice versa.
+		if parsed.After(now.AddDate(0, 6, 0)) {
+			parsed = parsed.AddDate(-1, 0, 0)
+		} else if parsed.Before(now.AddDate(0, -6, 0)) {
+			parsed = parsed.AddDate(1, 0, 0)
+		}
+		return parsed.Format("2006-01-02 15:04:05")
+	}
+	return ""
+}
+
 func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SSHLogRes, error) {
 	var lines []string
 
@@ -597,28 +645,11 @@ func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SS
 	acceptedRe := regexp.MustCompile(`Accepted (password|publickey|keyboard-interactive) for (\S+) from (\S+) port (\d+)`)
 	failedRe := regexp.MustCompile(`Failed (password|publickey|keyboard-interactive) for (?:invalid user )?(\S+) from (\S+) port (\d+)`)
 	invalidRe := regexp.MustCompile(`Invalid user (\S+) from (\S+) port (\d+)`)
-	dateRe := regexp.MustCompile(`^(\w+\s+\d+\s+\d+:\d+:\d+)`)
-	journalctlDateRe := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})`)
-
-	currentYear := time.Now().Year()
-	parseLogDate := func(line string) string {
-		if m := journalctlDateRe.FindStringSubmatch(line); m != nil {
-			return m[1]
-		}
-		if m := dateRe.FindStringSubmatch(line); m != nil {
-			parsed, err := time.Parse("Jan 2 15:04:05 2006", m[1]+fmt.Sprintf(" %d", currentYear))
-			if err == nil {
-				return parsed.Format("2006-01-02 15:04:05")
-			}
-			return m[1]
-		}
-		return ""
-	}
 
 	var items []dto.SSHLogItem
 	for _, line := range lines {
 		var item dto.SSHLogItem
-		date := parseLogDate(line)
+		date := parseSSHLogDate(line, time.Now())
 		if m := acceptedRe.FindStringSubmatch(line); m != nil {
 			item = dto.SSHLogItem{Date: date, AuthMode: m[1], User: m[2], Address: m[3], Port: m[4], Status: "success"}
 		} else if m := failedRe.FindStringSubmatch(line); m != nil {
