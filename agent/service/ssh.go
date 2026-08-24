@@ -487,6 +487,10 @@ func collectSSHProcessSessions(loginUser string, hostByPID map[int]string) ([]dt
 	return sessions, nil
 }
 
+// collectSSHSocketHosts returns the peer address visible to sshd.
+// When an SSH connection is relayed by a plain TCP proxy such as frpc, this
+// is the proxy's address because the original source address is not present
+// on the connection to sshd. Do not substitute an untrusted forwarded header.
 func collectSSHSocketHosts() map[int]string {
 	out, err := exec.Command("ss", "-tnp").Output()
 	if err != nil {
