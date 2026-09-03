@@ -2,14 +2,15 @@
 
 # GPanel 管理脚本
 # 使用方法:
-#   安装最新版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install
-#   安装指定版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install v1.0.0
-#   国内镜像安装: curl -fsSL https://gh.llkk.cc/https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install
-#   更新到最新:   sudo ./gpanel.sh update
-#   更新到指定:   sudo ./gpanel.sh update v1.0.0
-#   卸载:         sudo ./gpanel.sh uninstall
-#   查看状态:     sudo ./gpanel.sh status
-#   帮助:         sudo ./gpanel.sh help
+#   直连安装最新版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install
+#   直连安装指定版本: curl -fsSL https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- install v1.0.0
+#   加速安装最新版本: curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- --accelerated install
+#   加速安装指定版本: curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/lveMonsi/GPanel/master/gpanel.sh | sudo bash -s -- --accelerated install v1.0.0
+#   更新到最新:       sudo ./gpanel.sh update
+#   更新到指定:       sudo ./gpanel.sh update v1.0.0
+#   卸载:             sudo ./gpanel.sh uninstall
+#   查看状态:         sudo ./gpanel.sh status
+#   帮助:             sudo ./gpanel.sh help
 
 set -e
 
@@ -22,8 +23,8 @@ GITHUB_REPO="lveMonsi/GPanel"
 GITHUB_API="https://api.github.com/repos"
 GITHUB_RELEASES="https://github.com"
 
-# GitHub 代理（国内加速）
-GITHUB_PROXY="https://gh.llkk.cc/"
+# GitHub 国内加速前缀（通过 --accelerated 或 -a 启用）
+GITHUB_PROXY="https://gh-proxy.org/"
 
 # 安装目录
 INSTALL_DIR="/opt/gpanel"
@@ -40,6 +41,19 @@ INSTALL_INFO_FILE="$INSTALL_DIR/.install_info"
 # 版本号
 VERSION=""
 ACTION=""
+
+# 网络模式：默认直连，使用 --accelerated 或 -a 启用国内加速
+ACCELERATED=false
+
+# 为 GitHub URL 添加加速前缀
+github_url() {
+    local url="$1"
+    if [ "$ACCELERATED" = true ]; then
+        printf '%s%s' "$GITHUB_PROXY" "$url"
+    else
+        printf '%s' "$url"
+    fi
+}
 
 # 交互模式标志
 INTERACTIVE=true
@@ -588,7 +602,7 @@ print_status() {
 get_latest_version() {
     log_info "获取最新版本..." >&2
     
-    local api_url="${GITHUB_API}/${GITHUB_REPO}/releases/latest"
+    local api_url=$(github_url "${GITHUB_API}/${GITHUB_REPO}/releases/latest")
     local response
     
     # 下载函数（支持 wget 和 curl）
@@ -612,7 +626,7 @@ get_latest_version() {
     fi
     
     # 备用方案：解析 releases 页面
-    local releases_url="${GITHUB_RELEASES}/${GITHUB_REPO}/releases"
+    local releases_url=$(github_url "${GITHUB_RELEASES}/${GITHUB_REPO}/releases")
     if response=$($fetch_cmd "$releases_url" 2>/dev/null); then
         local latest_version=$(echo "$response" | grep -oP '/releases/tag/\K[^"]+' | head -1)
         if [ -n "$latest_version" ]; then
@@ -627,7 +641,7 @@ get_latest_version() {
 
 # 获取所有可用版本
 get_available_versions() {
-    local api_url="${GITHUB_API}/${GITHUB_REPO}/releases"
+    local api_url=$(github_url "${GITHUB_API}/${GITHUB_REPO}/releases")
     local response
     
     # 支持 wget 和 curl
@@ -652,7 +666,7 @@ get_available_versions() {
 get_prerelease_version() {
     log_info "获取预发布版本..." >&2
     
-    local api_url="${GITHUB_API}/${GITHUB_REPO}/releases"
+    local api_url=$(github_url "${GITHUB_API}/${GITHUB_REPO}/releases")
     local response
     
     # 支持 wget 和 curl
@@ -683,7 +697,7 @@ get_prerelease_version() {
 # 获取预发布版本信息
 get_prerelease_info() {
     local version=$1
-    local api_url="${GITHUB_API}/${GITHUB_REPO}/releases/tags/${version}"
+    local api_url=$(github_url "${GITHUB_API}/${GITHUB_REPO}/releases/tags/${version}")
     local response
     
     # 支持 wget 和 curl
@@ -732,7 +746,7 @@ validate_version() {
     # 规范化版本号
     version=$(normalize_version "$version")
     
-    local download_url="${GITHUB_PROXY}${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${version}/gpanel-linux-${ARCH}.tar.gz"
+    local download_url=$(github_url "${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${version}/gpanel-linux-${ARCH}.tar.gz")
     
     # 支持 wget 和 curl
     if command -v wget >/dev/null 2>&1; then
@@ -827,10 +841,10 @@ download_binaries() {
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR"
     
-    # 构建下载文件名和 URL（使用 GitHub 代理加速）
+    # 构建下载文件名和 URL
     local archive_name="gpanel-linux-${ARCH}.tar.gz"
-    local download_url="${GITHUB_PROXY}${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/${archive_name}"
-    local checksum_url="${GITHUB_PROXY}${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/checksums.txt"
+    local download_url=$(github_url "${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/${archive_name}")
+    local checksum_url=$(github_url "${GITHUB_RELEASES}/${GITHUB_REPO}/releases/download/${target_version}/checksums.txt")
     
     log_info "下载地址: $download_url"
     
@@ -2032,6 +2046,13 @@ do_help() {
     echo ""
     echo "  sudo ./gpanel.sh <command> [options]"
     echo ""
+    echo -e "${CYAN}网络模式:${NC}"
+    echo ""
+    echo "  默认模式: 直接访问 GitHub"
+    echo "  加速模式: 在命令前添加 --accelerated 或 -a"
+    echo "  示例: sudo ./gpanel.sh --accelerated install v1.0.0"
+    echo "        sudo ./gpanel.sh install v1.0.0 --accelerated"
+    echo ""
     echo -e "${CYAN}命令:${NC}"
     echo ""
     echo -e "  ${GREEN}install [version]${NC}    安装 GPanel 正式版本"
@@ -2106,6 +2127,29 @@ do_help() {
 # ============================================================
 
 main() {
+    # 解析网络模式选项（可放在命令前或命令后）
+    local args=()
+    local accelerated_count=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --accelerated|-a)
+                accelerated_count=$((accelerated_count + 1))
+                ACCELERATED=true
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    if [ "$accelerated_count" -gt 1 ]; then
+        log_error "加速选项不能重复"
+        exit 1
+    fi
+    set -- "${args[@]}"
+
     # 解析参数
     if [ $# -eq 0 ]; then
         # 无参数时默认显示帮助

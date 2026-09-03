@@ -153,10 +153,15 @@ jobs:
           - **Windows x86_64**: `gpanel-windows-amd64.zip`
           
           ### 安装方式
-          
-          可以使用管理脚本安装预发布版本：
+
+          可以使用管理脚本安装预发布版本（默认直连 GitHub）：
           ```bash
           curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/gpanel.sh | sudo bash -s -- install-pre
+          ```
+
+          国内网络可使用加速模式：
+          ```bash
+          curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/${{ github.repository }}/master/gpanel.sh | sudo bash -s -- --accelerated install-pre
           ```
           
           ### 更新日志
