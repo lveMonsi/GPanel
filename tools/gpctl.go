@@ -1,16 +1,24 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
+	"compress/gzip"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,6 +33,11 @@ const (
 	backupDir  = "/var/lib/gpanel/backups"
 	coreLog    = "/var/log/gpanel/gpanel.log"
 	agentLog   = "/var/log/gpanel/agent.log"
+
+	githubAPIBase     = "https://api.github.com/repos/lveMonsi/GPanel"
+	githubReleaseBase = "https://github.com/lveMonsi/GPanel"
+	githubProxy       = "https://gh-proxy.org/"
+	installInfoPath   = installDir + "/.install_info"
 )
 
 // 服务定义
@@ -60,6 +73,8 @@ func main() {
 		handleUserInfo()
 	case "update":
 		handleUpdate()
+	case "upgrade", "app-update", "update-app":
+		handleUpgrade()
 	case "init-security":
 		handleInitSecurity()
 	case "get-port":
@@ -103,6 +118,10 @@ func printUsage() {
 	fmt.Println("    update password   更新面板密码")
 	fmt.Println("    update port       更新面板端口")
 	fmt.Println("    update username   更新面板用户名")
+	fmt.Println("  upgrade [VERSION]   更新 GPanel 程序版本")
+	fmt.Println("    --prerelease      更新到最新预发布版本")
+	fmt.Println("    --accelerated,-a  使用内置 GitHub 加速链接")
+	fmt.Println("    --yes,-y          跳过更新确认")
 	fmt.Println("  init-security       初始化安全配置（随机端口和安全入口）")
 	fmt.Println("    init-security           随机生成端口和安全入口")
 	fmt.Println("    init-security --port N  指定端口，随机安全入口")
@@ -559,6 +578,498 @@ func handleUserInfo() {
 	fmt.Printf("Panel user: %s\n", username)
 	fmt.Printf("Panel password: %s\n", maskedPassword)
 	fmt.Println("Tip: To change the password, you can execute the command: gpctl update password")
+}
+
+type releaseInfo struct {
+	TagName    string `json:"tag_name"`
+	Prerelease bool   `json:"prerelease"`
+	Draft      bool   `json:"draft"`
+	Published  string `json:"published_at"`
+}
+
+type upgradeOptions struct {
+	version     string
+	prerelease  bool
+	accelerated bool
+	yes         bool
+	force       bool
+}
+
+type serviceSnapshot struct {
+	name    string
+	active  bool
+	enabled bool
+}
+
+func upgradeURL(raw string, accelerated bool) string {
+	if accelerated {
+		return githubProxy + raw
+	}
+	return raw
+}
+
+func normalizeUpgradeVersion(version string) (string, error) {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(version, "pre-release-") {
+		if len(version) <= len("pre-release-") {
+			return "", fmt.Errorf("预发布版本号无效")
+		}
+		return version, nil
+	}
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+	if len(version) < 2 || strings.ContainsAny(version, "/\\") {
+		return "", fmt.Errorf("版本号无效: %s", version)
+	}
+	return version, nil
+}
+
+func architectureName() (string, error) {
+	if runtime.GOOS != "linux" {
+		return "", fmt.Errorf("仅支持 Linux 系统更新")
+	}
+	switch runtime.GOARCH {
+	case "amd64":
+		return "amd64", nil
+	case "arm64":
+		return "arm64", nil
+	default:
+		return "", fmt.Errorf("不支持的架构: %s（仅支持 amd64/arm64）", runtime.GOARCH)
+	}
+}
+
+func parseUpgradeOptions(args []string) (upgradeOptions, error) {
+	var opts upgradeOptions
+	for _, arg := range args {
+		switch {
+		case arg == "--prerelease" || arg == "--pre-release":
+			opts.prerelease = true
+		case arg == "--accelerated" || arg == "-a":
+			opts.accelerated = true
+		case arg == "--yes" || arg == "-y":
+			opts.yes = true
+		case arg == "--force":
+			opts.force = true
+		case strings.HasPrefix(arg, "-"):
+			return opts, fmt.Errorf("未知参数: %s", arg)
+		case opts.version == "":
+			opts.version = arg
+		default:
+			return opts, fmt.Errorf("只能指定一个版本号")
+		}
+	}
+	if opts.prerelease && opts.version != "" && !strings.HasPrefix(opts.version, "pre-release-") {
+		return opts, fmt.Errorf("--prerelease 不能与正式版本号同时使用")
+	}
+	if strings.HasPrefix(opts.version, "pre-release-") {
+		opts.prerelease = true
+	}
+	return opts, nil
+}
+
+func httpGetBytes(url string, limit int64) ([]byte, error) {
+	client := &http.Client{Timeout: 2 * time.Minute}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "gpctl/1.1.0")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("HTTP %s", resp.Status)
+	}
+	if resp.ContentLength > limit {
+		return nil, fmt.Errorf("响应过大")
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("响应过大")
+	}
+	return body, nil
+}
+
+func getUpgradeRelease(opts upgradeOptions) (releaseInfo, error) {
+	if opts.version != "" {
+		version, err := normalizeUpgradeVersion(opts.version)
+		if err != nil {
+			return releaseInfo{}, err
+		}
+		if opts.prerelease != strings.HasPrefix(version, "pre-release-") {
+			return releaseInfo{}, fmt.Errorf("版本渠道不匹配: %s", version)
+		}
+		return releaseInfo{TagName: version, Prerelease: strings.HasPrefix(version, "pre-release-")}, nil
+	}
+	apiURL := githubAPIBase + "/releases/latest"
+	if opts.prerelease {
+		apiURL = githubAPIBase + "/releases?per_page=100"
+	}
+	body, err := httpGetBytes(upgradeURL(apiURL, opts.accelerated), 4<<20)
+	if err != nil {
+		return releaseInfo{}, fmt.Errorf("获取版本信息失败: %w", err)
+	}
+	if !opts.prerelease {
+		var release releaseInfo
+		if err := json.Unmarshal(body, &release); err != nil {
+			return releaseInfo{}, fmt.Errorf("解析版本信息失败: %w", err)
+		}
+		if release.Draft || release.Prerelease || !strings.HasPrefix(release.TagName, "v") {
+			return releaseInfo{}, fmt.Errorf("未找到有效正式版本")
+		}
+		return release, nil
+	}
+	var releases []releaseInfo
+	if err := json.Unmarshal(body, &releases); err != nil {
+		return releaseInfo{}, fmt.Errorf("解析预发布列表失败: %w", err)
+	}
+	valid := releases[:0]
+	for _, release := range releases {
+		if release.Prerelease && !release.Draft && strings.HasPrefix(release.TagName, "pre-release-") {
+			valid = append(valid, release)
+		}
+	}
+	if len(valid) == 0 {
+		return releaseInfo{}, fmt.Errorf("未找到预发布版本")
+	}
+	sort.SliceStable(valid, func(i, j int) bool { return valid[i].Published > valid[j].Published })
+	return valid[0], nil
+}
+
+func downloadUpgradeFiles(opts upgradeOptions, release releaseInfo, arch, dir string) (string, error) {
+	archiveName := "gpanel-linux-" + arch + ".tar.gz"
+	archiveURL := upgradeURL(githubReleaseBase+"/releases/download/"+release.TagName+"/"+archiveName, opts.accelerated)
+	checksumURL := upgradeURL(githubReleaseBase+"/releases/download/"+release.TagName+"/checksums.txt", opts.accelerated)
+	archive, err := httpGetBytes(archiveURL, 512<<20)
+	if err != nil {
+		return "", fmt.Errorf("下载归档失败: %w", err)
+	}
+	checksums, err := httpGetBytes(checksumURL, 1<<20)
+	if err != nil {
+		return "", fmt.Errorf("下载校验文件失败: %w", err)
+	}
+	var expected string
+	for _, line := range strings.Split(string(checksums), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[len(fields)-1] == archiveName {
+			if expected != "" || len(fields[0]) != 64 {
+				return "", fmt.Errorf("校验文件中归档条目重复或格式错误")
+			}
+			if _, err := hex.DecodeString(fields[0]); err != nil {
+				return "", fmt.Errorf("校验摘要格式错误")
+			}
+			expected = strings.ToLower(fields[0])
+		}
+	}
+	if expected == "" {
+		return "", fmt.Errorf("校验文件中缺少 %s", archiveName)
+	}
+	actual := sha256.Sum256(archive)
+	if hex.EncodeToString(actual[:]) != expected {
+		return "", fmt.Errorf("SHA-256 校验失败")
+	}
+	archivePath := filepath.Join(dir, archiveName)
+	if err := os.WriteFile(archivePath, archive, 0600); err != nil {
+		return "", err
+	}
+	return archivePath, nil
+}
+
+func extractUpgradeArchive(archivePath, staging, arch string) error {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("读取 gzip 失败: %w", err)
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	allowed := map[string]bool{
+		"linux-" + arch + "/gpanel":       true,
+		"linux-" + arch + "/gpanel-agent": true,
+		"linux-" + arch + "/gpctl":        true,
+	}
+	seen := make(map[string]bool)
+	for count := 0; ; count++ {
+		if count > 10 {
+			return fmt.Errorf("归档包含过多文件")
+		}
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("读取归档失败: %w", err)
+		}
+		clean := filepath.Clean(header.Name)
+		if clean == "linux-"+arch {
+			if header.Typeflag != tar.TypeDir {
+				return fmt.Errorf("归档目录条目无效: %s", header.Name)
+			}
+			continue
+		}
+		if clean != header.Name || filepath.IsAbs(header.Name) || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) || !allowed[clean] {
+			return fmt.Errorf("归档包含不允许的路径: %s", header.Name)
+		}
+		if header.Typeflag != tar.TypeReg || seen[clean] || header.Size <= 0 || header.Size > 256<<20 {
+			return fmt.Errorf("归档条目无效: %s", header.Name)
+		}
+		seen[clean] = true
+		out := filepath.Join(staging, filepath.Base(clean))
+		f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.CopyN(f, tr, header.Size)
+		syncErr := f.Sync()
+		closeErr := f.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if syncErr != nil {
+			return syncErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	if len(seen) != 3 {
+		return fmt.Errorf("归档缺少必要的二进制文件")
+	}
+	return nil
+}
+
+func readInstallInfo() (map[string]string, error) {
+	info := make(map[string]string)
+	body, err := os.ReadFile(installInfoPath)
+	if err != nil {
+		return info, err
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			info[parts[0]] = parts[1]
+		}
+	}
+	return info, nil
+}
+
+func writeInstallInfo(info map[string]string) error {
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(installDir, ".install_info.*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	keys := make([]string, 0, len(info))
+	for key := range info {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if _, err := fmt.Fprintf(tmp, "%s=%s\n", key, info[key]); err != nil {
+			tmp.Close()
+			return err
+		}
+	}
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, installInfoPath)
+}
+
+func confirmUpgrade() bool {
+	fmt.Print("确认开始更新? [y/N]: ")
+	var input string
+	fmt.Scanln(&input)
+	input = strings.ToLower(strings.TrimSpace(input))
+	return input == "y" || input == "yes"
+}
+
+func serviceSnapshotFor(name string) serviceSnapshot {
+	return serviceSnapshot{name: name, active: isServiceRunning(name), enabled: exec.Command("systemctl", "is-enabled", "--quiet", name).Run() == nil}
+}
+
+func restoreServiceSnapshot(snapshot []serviceSnapshot) {
+	for i := len(snapshot) - 1; i >= 0; i-- {
+		if snapshot[i].active {
+			exec.Command("systemctl", "stop", snapshot[i].name).Run()
+		}
+	}
+	for _, state := range snapshot {
+		if state.active {
+			exec.Command("systemctl", "start", state.name).Run()
+		}
+	}
+}
+
+func handleUpgrade() {
+	if !isRoot() {
+		fmt.Println("错误: 需要 root 权限")
+		os.Exit(1)
+	}
+	if !fileExists(installDir+"/gpanel") || !fileExists(installDir+"/gpanel-agent") {
+		fmt.Println("错误: GPanel 未安装")
+		os.Exit(1)
+	}
+	opts, err := parseUpgradeOptions(os.Args[2:])
+	if err != nil {
+		fmt.Printf("参数错误: %v\n", err)
+		os.Exit(2)
+	}
+	arch, err := architectureName()
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	release, err := getUpgradeRelease(opts)
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	info, _ := readInstallInfo()
+	current := info["version"]
+	fmt.Printf("当前版本: %s\n目标版本: %s\n下载模式: %s\n", current, release.TagName, map[bool]string{true: "加速", false: "直连"}[opts.accelerated])
+	if current == release.TagName && !opts.force {
+		fmt.Println("当前已是目标版本，使用 --force 可强制重装")
+		return
+	}
+	if !opts.yes && !confirmUpgrade() {
+		fmt.Println("更新已取消")
+		return
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		fmt.Println("创建临时目录失败:", err)
+		os.Exit(1)
+	}
+	temp, err := os.MkdirTemp(dataDir, "upgrade-")
+	if err != nil {
+		fmt.Println("创建临时目录失败:", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(temp)
+	archive, err := downloadUpgradeFiles(opts, release, arch, temp)
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	staging := filepath.Join(temp, "staging")
+	if err := os.Mkdir(staging, 0755); err != nil {
+		fmt.Println("创建暂存目录失败:", err)
+		os.Exit(1)
+	}
+	if err := extractUpgradeArchive(archive, staging, arch); err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	states := []serviceSnapshot{serviceSnapshotFor("gpanel-agent"), serviceSnapshotFor("gpanel")}
+	backup, err := os.MkdirTemp(dataDir, "upgrade-backup-")
+	if err != nil {
+		fmt.Println("创建备份目录失败:", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(backup)
+	targets := []string{installDir + "/gpanel", installDir + "/gpanel-agent", "/usr/local/bin/gpctl"}
+	for _, target := range targets {
+		if fileExists(target) {
+			if err := copyFile(target, filepath.Join(backup, filepath.Base(target))); err != nil {
+				fmt.Println("备份失败:", err)
+				os.Exit(1)
+			}
+		}
+	}
+	for i := len(states) - 1; i >= 0; i-- {
+		if states[i].active {
+			if err := exec.Command("systemctl", "stop", states[i].name).Run(); err != nil {
+				restoreServiceSnapshot(states)
+				fmt.Println("停止服务失败:", err)
+				os.Exit(1)
+			}
+		}
+	}
+	rollback := func() {
+		for _, target := range targets {
+			backupFile := filepath.Join(backup, filepath.Base(target))
+			if fileExists(backupFile) {
+				copyFile(backupFile, target)
+			}
+		}
+		restoreServiceSnapshot(states)
+	}
+	for _, target := range targets {
+		name := filepath.Base(target)
+		if !fileExists(filepath.Join(staging, name)) {
+			rollback()
+			fmt.Println("暂存文件缺失:", name)
+			os.Exit(1)
+		}
+		tmpTarget := target + ".upgrade.tmp"
+		if err := copyFile(filepath.Join(staging, name), tmpTarget); err != nil {
+			rollback()
+			fmt.Println("替换失败:", err)
+			os.Exit(1)
+		}
+		if err := os.Chmod(tmpTarget, 0755); err != nil || os.Rename(tmpTarget, target) != nil {
+			os.Remove(tmpTarget)
+			rollback()
+			fmt.Println("原子替换失败")
+			os.Exit(1)
+		}
+	}
+	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+		rollback()
+		fmt.Println("systemd 重载失败")
+		os.Exit(1)
+	}
+	for _, state := range states {
+		if state.active {
+			if err := exec.Command("systemctl", "start", state.name).Run(); err != nil {
+				rollback()
+				fmt.Println("服务启动失败，已回滚")
+				os.Exit(1)
+			}
+		}
+	}
+	if info == nil {
+		info = make(map[string]string)
+	}
+	info["version"] = release.TagName
+	info["arch"] = arch
+	info["os"] = "linux"
+	if release.Prerelease || strings.HasPrefix(release.TagName, "pre-release-") {
+		info["is_prerelease"] = "true"
+	} else {
+		info["is_prerelease"] = "false"
+	}
+	if err := writeInstallInfo(info); err != nil {
+		rollback()
+		fmt.Println("更新安装信息失败，已回滚:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("更新成功: %s -> %s\n", current, release.TagName)
 }
 
 // handleUpdate 处理 update 命令
