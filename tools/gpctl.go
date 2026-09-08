@@ -1057,6 +1057,16 @@ func handleUpgrade() {
 			}
 		}
 	}
+	if err := exec.Command("systemctl", "restart", "gpanel-agent").Run(); err != nil {
+		rollback()
+		fmt.Println("gpanel-agent 重启失败，已回滚")
+		os.Exit(1)
+	}
+	if err := exec.Command("systemctl", "restart", "gpanel").Run(); err != nil {
+		rollback()
+		fmt.Println("gpanel 重启失败，已回滚")
+		os.Exit(1)
+	}
 	if info == nil {
 		info = make(map[string]string)
 	}
