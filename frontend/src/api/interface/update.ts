@@ -15,6 +15,7 @@ export interface UpdateStatus {
   version?: string
   targetVersion?: string
   message?: string
+  percent?: number
   startedAt?: string
   finishedAt?: string
   error?: string

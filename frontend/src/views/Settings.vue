@@ -215,23 +215,33 @@
                 <div class="about-item update-item">
                   <div class="about-label">版本更新</div>
                   <div class="about-value">{{ buildInfo.version || '未知版本' }}</div>
+                  <div class="update-channel">
+                    <span class="update-channel-label">更新渠道</span>
+                    <el-radio-group v-model="updateInfo.channel" :disabled="updateChannelLocked">
+                      <el-radio value="stable">正式版（推荐）</el-radio>
+                      <el-radio value="prerelease">预发布版（测试）</el-radio>
+                    </el-radio-group>
+                  </div>
+                  <p v-if="updateInfo.channel === 'prerelease'" class="update-channel-warning">
+                    预发布版可能包含未完成功能或 Bug，稳定性无法保证，不建议在生产环境使用。
+                  </p>
                   <p v-if="updateMessage" class="update-message" :class="`update-${updatePhase}`">{{ updateMessage }}</p>
                   <div v-if="updateStatus.phase !== 'idle'" class="update-progress">
                     <div class="progress-track"><div class="progress-bar" :style="{ width: `${updateStatus.percent || 0}%` }"></div></div>
                     <span>{{ updateStatus.percent || 0 }}%</span>
                   </div>
                   <div class="update-actions">
-                    <button class="btn btn-secondary" :disabled="updateBusy" @click="checkUpdate">
+                    <button class="btn btn-secondary" :disabled="updateChannelLocked" @click="checkUpdate">
                       {{ updateBusy && updatePhase === 'checking' ? '检查中...' : '检查更新' }}
                     </button>
                     <button v-if="updateStatus.phase === 'idle' || updateStatus.phase === 'failed'" class="btn btn-primary" :disabled="updateBusy" @click="startOnlineUpdate">
-                      更新到最新版本
+                      {{ updateInfo.channel === 'prerelease' ? '更新到最新预发布版' : '更新到最新正式版' }}
                     </button>
                     <button v-if="updateStatus.phase === 'staged'" class="btn btn-primary" :disabled="updateBusy" @click="applyOnlineUpdate">
                       应用并重启
                     </button>
                   </div>
-                  <small class="hint">下载完成后请明确确认重启以应用更新，更新过程中请勿关闭页面。</small>
+                  <small class="hint">正式版为默认更新渠道。下载完成后请明确确认重启以应用更新，更新过程中请勿关闭页面。</small>
                 </div>
               </div>
             </div>
@@ -244,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/utils/axios'
 import Modal from '@/components/Modal.vue'
@@ -282,8 +292,10 @@ const editFieldName = ref('')
 const editFieldValue = ref('')
 const editFieldType = ref<'text' | 'password' | 'number'>('text')
 
-const updateInfo = reactive({
-  channel: 'stable' as const,
+type UpdateChannel = 'stable' | 'prerelease'
+
+const updateInfo = reactive<{ channel: UpdateChannel }>({
+  channel: 'stable',
 })
 const buildInfo = reactive<BuildInfo>({ version: '', buildTime: '', commit: '', goVersion: '', os: '', arch: '' })
 const updateStatus = reactive<UpdateStatus>({ state: 'idle', phase: 'idle' })
@@ -291,6 +303,14 @@ const updateBusy = ref(false)
 const updateMessage = ref('')
 let updatePollTimer: ReturnType<typeof setInterval> | null = null
 const updatePhase = ref<UpdatePhase>('idle')
+const updateChannelLocked = computed(() => updateBusy.value || [
+  'checking',
+  'downloading',
+  'validating',
+  'staged',
+  'restarting',
+  'rolling_back'
+].includes(updateStatus.phase))
 
 // 标签页相关
 const activeTab = ref('panel')
@@ -482,13 +502,30 @@ const checkUpdate = async () => {
 }
 
 const startOnlineUpdate = async () => {
+  const channel = updateInfo.channel
+  if (channel === 'prerelease') {
+    try {
+      await ElMessageBox.confirm(
+        '即将从预发布渠道下载最新版本。预发布版可能包含未完成功能或 Bug，稳定性无法保证，不建议在生产环境使用。下载完成后仍需再次确认并重启服务。是否继续？',
+        '预发布版本确认',
+        {
+          type: 'warning',
+          confirmButtonText: '继续下载',
+          cancelButtonText: '取消'
+        }
+      )
+    } catch {
+      return
+    }
+  }
+
   updateBusy.value = true
   updateStatus.state = 'running'
   updateStatus.phase = 'checking'
   updatePhase.value = 'checking'
   updateMessage.value = '正在暂存更新...'
   try {
-    await stageUpdate({ prerelease: updateInfo.channel === 'prerelease' })
+    await stageUpdate({ prerelease: channel === 'prerelease' })
     startUpdatePolling()
   } catch (error) {
     handleUpdateError(error, '启动更新失败')
@@ -853,6 +890,30 @@ const handleEditSave = (value: string) => {
 .update-item {
   border-top: 1px solid var(--border-color);
   padding-top: 1rem;
+}
+
+.update-channel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.update-channel-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.update-channel-warning {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #f5c26b;
+  border-radius: var(--radius-sm);
+  background: #fff8e6;
+  color: #8a5a00;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .update-message {
