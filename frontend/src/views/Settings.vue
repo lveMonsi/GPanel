@@ -214,7 +214,28 @@
                 </div>
                 <div class="about-item update-item">
                   <div class="about-label">版本更新</div>
-                  <div class="about-value">{{ buildInfo.version || '未知版本' }}</div>
+                  <div class="version-row">
+                    <span class="version-label">当前运行版本</span>
+                    <span class="about-value">{{ buildInfo.version || '未知版本' }}</span>
+                    <span v-if="currentChannelLabel" class="version-channel" :class="{ 'version-channel-warning': currentChannel === 'prerelease' }">
+                      {{ currentChannelLabel }}
+                    </span>
+                  </div>
+                  <div class="version-row">
+                    <span class="version-label">{{ selectedChannelLabel }}最新版本</span>
+                    <span v-if="latestLoading" class="version-secondary">正在查询...</span>
+                    <span v-else-if="latestRelease" class="about-value">{{ latestRelease.version }}</span>
+                    <span v-else class="version-secondary">{{ latestError || '暂无有效版本' }}</span>
+                    <span v-if="latestRelease" class="version-channel" :class="{ 'version-channel-warning': latestRelease.channel === 'prerelease' }">
+                      {{ releaseChannelLabel(latestRelease.channel) }}
+                    </span>
+                  </div>
+                  <div v-if="latestRelease?.publishedAt" class="version-published">
+                    发布时间：{{ formatPublishedAt(latestRelease.publishedAt) }}
+                  </div>
+                  <div v-if="versionComparisonMessage" class="version-comparison" :class="{ 'version-comparison-success': versionIsCurrent }">
+                    {{ versionComparisonMessage }}
+                  </div>
                   <div class="update-channel">
                     <span class="update-channel-label">更新渠道</span>
                     <el-radio-group v-model="updateInfo.channel" :disabled="updateChannelLocked">
@@ -225,16 +246,19 @@
                   <p v-if="updateInfo.channel === 'prerelease'" class="update-channel-warning">
                     预发布版可能包含未完成功能或 Bug，稳定性无法保证，不建议在生产环境使用。
                   </p>
+                  <div v-if="updateStatus.phase === 'staged' && updateStatus.targetVersion" class="staged-target">
+                    待应用版本：{{ updateStatus.targetVersion }}（{{ releaseChannelLabel(updateStatus.channel || classifyVersionChannel(updateStatus.targetVersion)) }}）
+                  </div>
                   <p v-if="updateMessage" class="update-message" :class="`update-${updatePhase}`">{{ updateMessage }}</p>
                   <div v-if="updateStatus.phase !== 'idle'" class="update-progress">
                     <div class="progress-track"><div class="progress-bar" :style="{ width: `${updateStatus.percent || 0}%` }"></div></div>
                     <span>{{ updateStatus.percent || 0 }}%</span>
                   </div>
                   <div class="update-actions">
-                    <button class="btn btn-secondary" :disabled="updateChannelLocked" @click="checkUpdate">
-                      {{ updateBusy && updatePhase === 'checking' ? '检查中...' : '检查更新' }}
+                    <button class="btn btn-secondary" :disabled="updateChannelLocked || latestLoading" @click="checkUpdate">
+                      {{ latestLoading ? '检查中...' : '检查更新' }}
                     </button>
-                    <button v-if="updateStatus.phase === 'idle' || updateStatus.phase === 'failed'" class="btn btn-primary" :disabled="updateBusy" @click="startOnlineUpdate">
+                    <button v-if="updateStatus.phase === 'idle' || updateStatus.phase === 'failed'" class="btn btn-primary" :disabled="updateBusy || latestLoading || !latestRelease" @click="startOnlineUpdate">
                       {{ updateInfo.channel === 'prerelease' ? '更新到最新预发布版' : '更新到最新正式版' }}
                     </button>
                     <button v-if="updateStatus.phase === 'staged'" class="btn btn-primary" :disabled="updateBusy" @click="applyOnlineUpdate">
@@ -261,8 +285,8 @@ import Modal from '@/components/Modal.vue'
 import EditModal from '@/components/EditModal.vue'
 import { Edit, Loading } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
-import { getBuildInfo, getUpdateStatus, applyUpdate, stageUpdate } from '@/api/modules/update'
-import type { BuildInfo, UpdatePhase, UpdateStatus } from '@/api/interface/update'
+import { getBuildInfo, getLatestVersion, getUpdateStatus, applyUpdate, stageUpdate } from '@/api/modules/update'
+import type { BuildInfo, CurrentReleaseChannel, LatestRelease, ReleaseChannel, UpdatePhase, UpdateStatus } from '@/api/interface/update'
 
 interface Config {
   panelUser: string
@@ -301,6 +325,10 @@ const buildInfo = reactive<BuildInfo>({ version: '', buildTime: '', commit: '', 
 const updateStatus = reactive<UpdateStatus>({ state: 'idle', phase: 'idle' })
 const updateBusy = ref(false)
 const updateMessage = ref('')
+const latestRelease = ref<LatestRelease | null>(null)
+const latestLoading = ref(false)
+const latestError = ref('')
+const latestRequestId = ref(0)
 let updatePollTimer: ReturnType<typeof setInterval> | null = null
 const updatePhase = ref<UpdatePhase>('idle')
 const updateChannelLocked = computed(() => updateBusy.value || [
@@ -311,6 +339,31 @@ const updateChannelLocked = computed(() => updateBusy.value || [
   'restarting',
   'rolling_back'
 ].includes(updateStatus.phase))
+const releaseChannelLabel = (channel: ReleaseChannel | CurrentReleaseChannel) => {
+  if (channel === 'stable') return '正式版'
+  if (channel === 'prerelease') return '预发布版'
+  return '未知渠道'
+}
+
+const classifyVersionChannel = (version: string): CurrentReleaseChannel => {
+  if (version.startsWith('pre-release-')) return 'prerelease'
+  if (version.startsWith('v')) return 'stable'
+  return 'unknown'
+}
+
+const formatPublishedAt = (value: string) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN')
+}
+
+const selectedChannelLabel = computed(() => releaseChannelLabel(updateInfo.channel))
+const currentChannel = ref<CurrentReleaseChannel>('unknown')
+const currentChannelLabel = computed(() => currentChannel.value === 'unknown' ? '渠道未知' : releaseChannelLabel(currentChannel.value))
+const versionIsCurrent = computed(() => Boolean(buildInfo.version && latestRelease.value && buildInfo.version === latestRelease.value.version))
+const versionComparisonMessage = computed(() => {
+  if (latestLoading.value || latestError.value || !latestRelease.value) return ''
+  return versionIsCurrent.value ? '当前已是该渠道最新版本' : `可更新到 ${latestRelease.value.version}`
+})
 
 // 标签页相关
 const activeTab = ref('panel')
@@ -484,21 +537,41 @@ const startUpdatePolling = () => {
   void pollUpdateStatus()
 }
 
-const checkUpdate = async () => {
-  updateBusy.value = true
-  updateMessage.value = '正在读取当前版本...'
+const loadCurrentVersion = async () => {
   try {
     const result = await getBuildInfo()
     Object.assign(buildInfo, result)
-    updatePhase.value = 'idle'
-    updateStatus.state = 'idle'
-    updateStatus.phase = 'idle'
-    updateMessage.value = `当前版本 ${result.version}`
+    currentChannel.value = classifyVersionChannel(result.version)
   } catch (error) {
-    handleUpdateError(error, '读取版本失败')
-  } finally {
-    updateBusy.value = false
+    console.error('读取当前版本失败:', error)
   }
+}
+
+const loadLatestVersion = async (channel: ReleaseChannel = updateInfo.channel) => {
+  const requestId = latestRequestId.value + 1
+  latestRequestId.value = requestId
+  latestRelease.value = null
+  latestError.value = ''
+  latestLoading.value = true
+  try {
+    const result = await getLatestVersion(channel)
+    if (requestId !== latestRequestId.value || result.channel !== channel) return
+    latestRelease.value = result.latest
+    if (result.current.version && !buildInfo.version) {
+      Object.assign(buildInfo, result.current)
+      currentChannel.value = result.currentChannel
+    }
+  } catch (error) {
+    if (requestId !== latestRequestId.value) return
+    console.error('获取最新版本失败:', error)
+    latestError.value = `获取${releaseChannelLabel(channel)}失败，请重试`
+  } finally {
+    if (requestId === latestRequestId.value) latestLoading.value = false
+  }
+}
+
+const checkUpdate = async () => {
+  await Promise.all([loadCurrentVersion(), loadLatestVersion()])
 }
 
 const startOnlineUpdate = async () => {
@@ -552,6 +625,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(stopUpdatePolling)
+
+watch(() => updateInfo.channel, (channel) => {
+  if (!updateChannelLocked.value) void loadLatestVersion(channel)
+})
 
 watch(() => config, () => {
   checkConfigChanged()
@@ -890,6 +967,63 @@ const handleEditSave = (value: string) => {
 .update-item {
   border-top: 1px solid var(--border-color);
   padding-top: 1rem;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.version-label {
+  min-width: 8rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.version-secondary {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.version-channel {
+  padding: 0.12rem 0.4rem;
+  border: 1px solid #9ed7b8;
+  border-radius: 999px;
+  background: #effaf3;
+  color: #2e8050;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.version-channel-warning {
+  border-color: #f5c26b;
+  background: #fff8e6;
+  color: #8a5a00;
+}
+
+.version-published,
+.version-comparison,
+.staged-target {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.version-comparison {
+  color: #b06b00;
+}
+
+.version-comparison-success {
+  color: #2e8050;
+}
+
+.staged-target {
+  padding: 0.45rem 0.6rem;
+  border-left: 3px solid var(--primary);
+  background: var(--bg-color);
 }
 
 .update-channel {

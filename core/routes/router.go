@@ -83,6 +83,7 @@ func SetupRouter(r *gin.Engine) {
 			v1.GET("/system/current", middleware.Auth(), systemController.GetCurrentInfo)
 			v1.GET("/system/os", middleware.Auth(), systemController.GetOSInfo)
 			v1.GET("/version", middleware.Auth(), controllers.GetVersion)
+			v1.GET("/update/latest", middleware.Auth(), updateController.Latest)
 			v1.GET("/update/status", middleware.Auth(), updateController.Status)
 			v1.POST("/update", middleware.Auth(), updateController.Start)
 			v1.POST("/update/apply", middleware.Auth(), updateController.Apply)

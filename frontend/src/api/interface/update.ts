@@ -1,4 +1,6 @@
 export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'validating' | 'staged' | 'restarting' | 'rolling_back' | 'completed' | 'failed'
+export type ReleaseChannel = 'stable' | 'prerelease'
+export type CurrentReleaseChannel = ReleaseChannel | 'unknown'
 
 export interface BuildInfo {
   version: string
@@ -9,9 +11,25 @@ export interface BuildInfo {
   arch: string
 }
 
+export interface LatestRelease {
+  version: string
+  channel: ReleaseChannel
+  prerelease: boolean
+  publishedAt: string
+  htmlUrl?: string
+}
+
+export interface LatestVersionResponse {
+  current: BuildInfo
+  currentChannel: CurrentReleaseChannel
+  channel: ReleaseChannel
+  latest: LatestRelease | null
+}
+
 export interface UpdateStatus {
   state: 'idle' | 'running' | 'success' | 'failed'
   phase: UpdatePhase
+  channel?: ReleaseChannel
   version?: string
   targetVersion?: string
   message?: string
