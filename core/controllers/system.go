@@ -89,6 +89,7 @@ func GetConfig(c *gin.Context) {
 			"timezone": global.ConfigCacheInstance.GetTimezone(),
 		},
 		"version": global.ConfigCacheInstance.GetVersion(),
+		"build":   global.GetBuildInfo(),
 	})
 }
 

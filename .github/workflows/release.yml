@@ -46,7 +46,7 @@ jobs:
           elif [ -n "${{ github.ref_name }}" ]; then
             VERSION="${{ github.ref_name }}"
           else
-            VERSION=$(grep -oP 'VERSION=\K.*' .env)
+            VERSION="v0.0.0"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
@@ -76,21 +76,21 @@ jobs:
       - name: Build Linux amd64
         run: |
           mkdir -p build/linux-amd64
-          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpanel .
+          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X gpanel/global.Version=${{ steps.build_info.outputs.version }} -X gpanel/global.BuildTime=${{ steps.build_info.outputs.build_time }} -X gpanel/global.Commit=${{ steps.build_info.outputs.commit_short }}" -o ../build/linux-amd64/gpanel .
           cd ../agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpanel-agent .
           cd ../tools && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/linux-amd64/gpctl gpctl.go
 
       - name: Build Linux arm64
         run: |
           mkdir -p build/linux-arm64
-          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpanel .
+          cd core && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X gpanel/global.Version=${{ steps.build_info.outputs.version }} -X gpanel/global.BuildTime=${{ steps.build_info.outputs.build_time }} -X gpanel/global.Commit=${{ steps.build_info.outputs.commit_short }}" -o ../build/linux-arm64/gpanel .
           cd ../agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpanel-agent .
           cd ../tools && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../build/linux-arm64/gpctl gpctl.go
 
       - name: Build Windows amd64
         run: |
           mkdir -p build/windows-amd64
-          cd core && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpanel.exe .
+          cd core && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X gpanel/global.Version=${{ steps.build_info.outputs.version }} -X gpanel/global.BuildTime=${{ steps.build_info.outputs.build_time }} -X gpanel/global.Commit=${{ steps.build_info.outputs.commit_short }}" -o ../build/windows-amd64/gpanel.exe .
           cd ../agent && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpanel-agent.exe .
           cd ../tools && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../build/windows-amd64/gpctl.exe gpctl.go
 

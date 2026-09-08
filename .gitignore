@@ -24,6 +24,7 @@ go.work
 *.swo
 *~
 *.md
+!CLAUDE.md
 
 # OS
 .DS_Store

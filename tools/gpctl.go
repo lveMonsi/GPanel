@@ -75,6 +75,10 @@ func main() {
 		handleUpdate()
 	case "upgrade", "app-update", "update-app":
 		handleUpgrade()
+	case "online-stage":
+		handleOnlineStage()
+	case "online-apply":
+		handleOnlineApply()
 	case "init-security":
 		handleInitSecurity()
 	case "get-port":
@@ -1070,6 +1074,403 @@ func handleUpgrade() {
 		os.Exit(1)
 	}
 	fmt.Printf("更新成功: %s -> %s\n", current, release.TagName)
+}
+
+type onlineStatus struct {
+	OperationID   string    `json:"operation_id"`
+	Phase         string    `json:"phase"`
+	Message       string    `json:"message"`
+	Version       string    `json:"version,omitempty"`
+	TargetVersion string    `json:"target_version,omitempty"`
+	Percent       int       `json:"percent"`
+	Error         string    `json:"error,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type onlineManifest struct {
+	OperationID   string            `json:"operation_id"`
+	TargetVersion string            `json:"target_version"`
+	Arch          string            `json:"arch"`
+	BackupDir     string            `json:"backup_dir"`
+	PreviousInfo  map[string]string `json:"previous_info"`
+	Active        map[string]bool   `json:"active"`
+	Enabled       map[string]bool   `json:"enabled"`
+}
+
+const (
+	onlineDir          = dataDir + "/online-update"
+	onlineStatusPath   = onlineDir + "/status.json"
+	onlineManifestPath = onlineDir + "/manifest.json"
+	onlineLockPath     = onlineDir + "/.lock"
+)
+
+func writeOnlineStatus(status onlineStatus) error {
+	if err := os.MkdirAll(onlineDir, 0700); err != nil {
+		return err
+	}
+	status.UpdatedAt = time.Now().UTC()
+	body, err := json.Marshal(status)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(onlineDir, ".status-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err = tmp.Chmod(0600); err == nil {
+		_, err = tmp.Write(body)
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(name, onlineStatusPath)
+	}
+	return err
+}
+
+func readOnlineManifest() (onlineManifest, error) {
+	var m onlineManifest
+	body, err := os.ReadFile(onlineManifestPath)
+	if err != nil {
+		return m, err
+	}
+	err = json.Unmarshal(body, &m)
+	return m, err
+}
+
+func acquireOnlineLock() (*os.File, error) {
+	if err := os.MkdirAll(onlineDir, 0700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(onlineLockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("在线更新正在进行中")
+	}
+	if _, err = fmt.Fprintf(f, "%d\\n", os.Getpid()); err != nil {
+		f.Close()
+		os.Remove(onlineLockPath)
+		return nil, err
+	}
+	return f, nil
+}
+
+func releaseOnlineLock(f *os.File) {
+	if f != nil {
+		f.Close()
+	}
+	os.Remove(onlineLockPath)
+}
+
+func randomOperationID() string { return fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid()) }
+
+func writeOnlineManifest(m onlineManifest) error {
+	body, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(onlineDir, ".manifest-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err = tmp.Chmod(0600); err == nil {
+		_, err = tmp.Write(body)
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(name, onlineManifestPath)
+	}
+	return err
+}
+
+func copyFileAtomic(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".gpanel-update-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	in, err := os.Open(src)
+	if err != nil {
+		tmp.Close()
+		return err
+	}
+	_, copyErr := io.Copy(tmp, in)
+	in.Close()
+	if copyErr == nil {
+		copyErr = tmp.Chmod(0755)
+	}
+	if copyErr == nil {
+		copyErr = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); copyErr == nil {
+		copyErr = closeErr
+	}
+	if copyErr != nil {
+		return copyErr
+	}
+	return os.Rename(name, dst)
+}
+
+func serviceEnabled(name string) bool {
+	return exec.Command("systemctl", "is-enabled", "--quiet", name).Run() == nil
+}
+
+func restoreEnabledStates(m onlineManifest) error {
+	for _, name := range []string{"gpanel-agent", "gpanel"} {
+		want := m.Enabled[name]
+		got := serviceEnabled(name)
+		if want && !got {
+			if err := exec.Command("systemctl", "enable", name).Run(); err != nil {
+				return err
+			}
+		}
+		if !want && got {
+			if err := exec.Command("systemctl", "disable", name).Run(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func restoreOnlineManifest(m onlineManifest) error {
+	targets := []string{installDir + "/gpanel", installDir + "/gpanel-agent", "/usr/local/bin/gpctl"}
+	for _, target := range targets {
+		backup := filepath.Join(m.BackupDir, filepath.Base(target))
+		if !fileExists(backup) {
+			return fmt.Errorf("备份文件不存在: %s", backup)
+		}
+		if err := copyFileAtomic(backup, target); err != nil {
+			return err
+		}
+	}
+	if m.PreviousInfo != nil {
+		if err := writeInstallInfo(m.PreviousInfo); err != nil {
+			return err
+		}
+	}
+	return restoreEnabledStates(m)
+}
+
+func waitOnlineHealth() error {
+	port := getCorePort()
+	client := &http.Client{Timeout: 2 * time.Second}
+	for i := 0; i < 30; i++ {
+		coreOK, agentOK := false, false
+		if resp, err := client.Get("http://127.0.0.1:" + port + "/api/v1/health"); err == nil {
+			coreOK = resp.StatusCode == http.StatusOK
+			resp.Body.Close()
+		}
+		if resp, err := client.Get("http://127.0.0.1:9998/health"); err == nil {
+			agentOK = resp.StatusCode == http.StatusOK
+			resp.Body.Close()
+		}
+		if coreOK && agentOK {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("服务健康检查超时")
+}
+
+func handleOnlineStage() {
+	if !isRoot() {
+		fmt.Println("错误: 需要 root 权限")
+		os.Exit(1)
+	}
+	lock, err := acquireOnlineLock()
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	defer releaseOnlineLock(lock)
+	if fileExists(onlineManifestPath) {
+		fmt.Println("错误: 存在待应用的更新")
+		os.Exit(1)
+	}
+	opts, err := parseUpgradeOptions(os.Args[2:])
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(2)
+	}
+	arch, err := architectureName()
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	if err = writeOnlineStatus(onlineStatus{Phase: "checking", Message: "正在检查版本", Percent: 0}); err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	release, err := getUpgradeRelease(opts)
+	if err != nil {
+		writeOnlineStatus(onlineStatus{Phase: "failed", Error: err.Error(), Message: "检查版本失败"})
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	if err = writeOnlineStatus(onlineStatus{Phase: "downloading", Message: "正在下载更新", TargetVersion: release.TagName, Percent: 10}); err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	temp, err := os.MkdirTemp(onlineDir, "stage-")
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(temp)
+	archive, err := downloadUpgradeFiles(opts, release, arch, temp)
+	if err == nil {
+		err = writeOnlineStatus(onlineStatus{Phase: "validating", Message: "正在验证更新包", TargetVersion: release.TagName, Percent: 45})
+	}
+	staging := filepath.Join(temp, "staging")
+	if err == nil {
+		err = os.Mkdir(staging, 0755)
+	}
+	if err == nil {
+		err = extractUpgradeArchive(archive, staging, arch)
+	}
+	if err != nil {
+		writeOnlineStatus(onlineStatus{Phase: "failed", Error: err.Error(), Message: "更新包验证失败", TargetVersion: release.TagName})
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	backup, err := os.MkdirTemp(dataDir, "online-backup-")
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	info, _ := readInstallInfo()
+	m := onlineManifest{OperationID: randomOperationID(), TargetVersion: release.TagName, Arch: arch, BackupDir: backup, PreviousInfo: info, Active: map[string]bool{}, Enabled: map[string]bool{}}
+	for _, name := range []string{"gpanel-agent", "gpanel"} {
+		m.Active[name] = isServiceRunning(name)
+		m.Enabled[name] = serviceEnabled(name)
+	}
+	targets := []string{installDir + "/gpanel", installDir + "/gpanel-agent", "/usr/local/bin/gpctl"}
+	for _, target := range targets {
+		if fileExists(target) {
+			if err = copyFile(target, filepath.Join(backup, filepath.Base(target))); err != nil {
+				break
+			}
+		}
+	}
+	if err == nil {
+		err = writeOnlineManifest(m)
+	}
+	if err == nil {
+		for _, target := range targets {
+			staged := filepath.Join(staging, filepath.Base(target))
+			if !fileExists(staged) {
+				err = fmt.Errorf("暂存文件缺失: %s", staged)
+				break
+			}
+			if err = copyFileAtomic(staged, target); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		if m.BackupDir != "" {
+			restoreOnlineManifest(m)
+		}
+		os.RemoveAll(backup)
+		writeOnlineStatus(onlineStatus{Phase: "failed", Error: err.Error(), Message: "更新暂存失败", TargetVersion: release.TagName})
+		os.Remove(onlineManifestPath)
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	if err = writeOnlineStatus(onlineStatus{OperationID: m.OperationID, Phase: "staged", Message: "更新已准备完成，请重启应用", TargetVersion: release.TagName, Percent: 100}); err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	fmt.Println("更新已准备完成:", release.TagName)
+}
+
+func handleOnlineApply() {
+	if !isRoot() {
+		fmt.Println("错误: 需要 root 权限")
+		os.Exit(1)
+	}
+	lock, err := acquireOnlineLock()
+	if err != nil {
+		fmt.Println("错误:", err)
+		os.Exit(1)
+	}
+	defer releaseOnlineLock(lock)
+	m, err := readOnlineManifest()
+	if err != nil {
+		fmt.Println("错误: 没有待应用的更新")
+		os.Exit(1)
+	}
+	writeOnlineStatus(onlineStatus{OperationID: m.OperationID, Phase: "restarting", Message: "正在重启服务", TargetVersion: m.TargetVersion, Percent: 0})
+	for i := len(services) - 1; i >= 0; i-- {
+		if m.Active[services[i]] {
+			if err = exec.Command("systemctl", "stop", services[i]).Run(); err != nil {
+				break
+			}
+		}
+	}
+	if err == nil {
+		for _, name := range services {
+			if m.Active[name] {
+				if err = exec.Command("systemctl", "start", name).Run(); err != nil {
+					break
+				}
+			}
+		}
+	}
+	if err == nil {
+		err = exec.Command("systemctl", "daemon-reload").Run()
+	}
+	if err == nil {
+		err = waitOnlineHealth()
+	}
+	if err != nil {
+		writeOnlineStatus(onlineStatus{OperationID: m.OperationID, Phase: "rolling_back", Message: "新版本启动失败，正在回滚", TargetVersion: m.TargetVersion, Error: err.Error()})
+		for i := len(services) - 1; i >= 0; i-- {
+			exec.Command("systemctl", "stop", services[i]).Run()
+		}
+		if restoreErr := restoreOnlineManifest(m); restoreErr != nil {
+			err = fmt.Errorf("更新失败且回滚失败: %v; %w", restoreErr, err)
+		}
+		for _, name := range services {
+			if m.Active[name] {
+				exec.Command("systemctl", "start", name).Run()
+			}
+		}
+		writeOnlineStatus(onlineStatus{OperationID: m.OperationID, Phase: "failed", Message: "更新失败，已恢复旧版本", TargetVersion: m.TargetVersion, Error: err.Error()})
+		os.Exit(1)
+	}
+	if m.PreviousInfo == nil {
+		m.PreviousInfo = map[string]string{}
+	}
+	m.PreviousInfo["version"] = m.TargetVersion
+	m.PreviousInfo["arch"] = m.Arch
+	m.PreviousInfo["os"] = "linux"
+	m.PreviousInfo["is_prerelease"] = fmt.Sprintf("%t", strings.HasPrefix(m.TargetVersion, "pre-release-"))
+	if err = writeInstallInfo(m.PreviousInfo); err != nil {
+		fmt.Println("错误: 安装信息写入失败:", err)
+		os.Exit(1)
+	}
+	os.RemoveAll(m.BackupDir)
+	os.Remove(onlineManifestPath)
+	writeOnlineStatus(onlineStatus{OperationID: m.OperationID, Phase: "completed", Message: "更新并重启成功", TargetVersion: m.TargetVersion, Percent: 100})
+	fmt.Println("更新并重启成功:", m.TargetVersion)
 }
 
 // handleUpdate 处理 update 命令

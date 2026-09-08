@@ -212,6 +212,27 @@
                   <div class="about-value">服务器管理面板</div>
                   <a href="https://github.com/lveMonsi/GPanel" target="_blank" rel="noopener noreferrer">源码仓库</a>
                 </div>
+                <div class="about-item update-item">
+                  <div class="about-label">版本更新</div>
+                  <div class="about-value">{{ buildInfo.version || '未知版本' }}</div>
+                  <p v-if="updateMessage" class="update-message" :class="`update-${updatePhase}`">{{ updateMessage }}</p>
+                  <div v-if="updateStatus.phase !== 'idle'" class="update-progress">
+                    <div class="progress-track"><div class="progress-bar" :style="{ width: `${updateStatus.percent || 0}%` }"></div></div>
+                    <span>{{ updateStatus.percent || 0 }}%</span>
+                  </div>
+                  <div class="update-actions">
+                    <button class="btn btn-secondary" :disabled="updateBusy" @click="checkUpdate">
+                      {{ updateBusy && updatePhase === 'checking' ? '检查中...' : '检查更新' }}
+                    </button>
+                    <button v-if="updateStatus.phase === 'idle' || updateStatus.phase === 'failed'" class="btn btn-primary" :disabled="updateBusy" @click="startOnlineUpdate">
+                      更新到最新版本
+                    </button>
+                    <button v-if="updateStatus.phase === 'staged'" class="btn btn-primary" :disabled="updateBusy" @click="applyOnlineUpdate">
+                      应用并重启
+                    </button>
+                  </div>
+                  <small class="hint">下载完成后请明确确认重启以应用更新，更新过程中请勿关闭页面。</small>
+                </div>
               </div>
             </div>
           </div>
@@ -223,12 +244,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/utils/axios'
 import Modal from '@/components/Modal.vue'
 import EditModal from '@/components/EditModal.vue'
-import { Refresh, Edit, Loading } from '@element-plus/icons-vue'
+import { Edit, Loading } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { getBuildInfo, getUpdateStatus, applyUpdate, stageUpdate } from '@/api/modules/update'
+import type { BuildInfo, UpdatePhase, UpdateStatus } from '@/api/interface/update'
 
 interface Config {
   panelUser: string
@@ -257,6 +281,16 @@ const editModalTitle = ref('')
 const editFieldName = ref('')
 const editFieldValue = ref('')
 const editFieldType = ref<'text' | 'password' | 'number'>('text')
+
+const updateInfo = reactive({
+  channel: 'stable' as const,
+})
+const buildInfo = reactive<BuildInfo>({ version: '', buildTime: '', commit: '', goVersion: '', os: '', arch: '' })
+const updateStatus = reactive<UpdateStatus>({ state: 'idle', phase: 'idle' })
+const updateBusy = ref(false)
+const updateMessage = ref('')
+let updatePollTimer: ReturnType<typeof setInterval> | null = null
+const updatePhase = ref<UpdatePhase>('idle')
 
 // 标签页相关
 const activeTab = ref('panel')
@@ -386,9 +420,101 @@ const handleSave = async () => {
   }
 }
 
+const stopUpdatePolling = () => {
+  if (updatePollTimer) {
+    clearInterval(updatePollTimer)
+    updatePollTimer = null
+  }
+}
+
+const isConnectionLoss = (error: unknown) => {
+  const candidate = error as { code?: string; message?: string; response?: unknown }
+  return candidate?.code === 'ERR_NETWORK' || candidate?.code === 'ECONNABORTED' || !candidate?.response
+}
+
+const handleUpdateError = (error: unknown, fallback: string) => {
+  console.error(fallback, error)
+  updateStatus.state = 'failed'
+  updateStatus.phase = 'failed'
+  updatePhase.value = 'failed'
+  updateStatus.error = isConnectionLoss(error) ? '面板连接已断开。更新可能仍在后台进行，请稍后刷新页面确认。' : fallback
+  updateMessage.value = updateStatus.error
+  updateBusy.value = false
+  stopUpdatePolling()
+}
+
+const pollUpdateStatus = async () => {
+  try {
+    const status = await getUpdateStatus()
+    Object.assign(updateStatus, status)
+    updatePhase.value = status.phase
+    updateMessage.value = status.message || status.error || status.output || (status.state === 'running' ? '正在更新...' : '')
+    if (status.phase === 'staged' || status.phase === 'completed' || status.phase === 'failed' || status.phase === 'idle') {
+      updateBusy.value = false
+      stopUpdatePolling()
+    }
+  } catch (error) {
+    handleUpdateError(error, '获取更新进度失败')
+  }
+}
+
+const startUpdatePolling = () => {
+  stopUpdatePolling()
+  updatePollTimer = setInterval(() => void pollUpdateStatus(), 1500)
+  void pollUpdateStatus()
+}
+
+const checkUpdate = async () => {
+  updateBusy.value = true
+  updateMessage.value = '正在读取当前版本...'
+  try {
+    const result = await getBuildInfo()
+    Object.assign(buildInfo, result)
+    updatePhase.value = 'idle'
+    updateStatus.state = 'idle'
+    updateStatus.phase = 'idle'
+    updateMessage.value = `当前版本 ${result.version}`
+  } catch (error) {
+    handleUpdateError(error, '读取版本失败')
+  } finally {
+    updateBusy.value = false
+  }
+}
+
+const startOnlineUpdate = async () => {
+  updateBusy.value = true
+  updateStatus.state = 'running'
+  updateStatus.phase = 'checking'
+  updatePhase.value = 'checking'
+  updateMessage.value = '正在暂存更新...'
+  try {
+    await stageUpdate({ prerelease: updateInfo.channel === 'prerelease' })
+    startUpdatePolling()
+  } catch (error) {
+    handleUpdateError(error, '启动更新失败')
+  }
+}
+
+const applyOnlineUpdate = async () => {
+  try {
+    await ElMessageBox.confirm('将应用暂存更新并重启服务，连接会短暂中断。是否继续？', '应用更新', { type: 'warning' })
+    updateBusy.value = true
+    updateStatus.phase = 'restarting'
+    updateMessage.value = '正在应用更新，面板即将重启...'
+    await applyUpdate()
+    startUpdatePolling()
+  } catch (error) {
+    if ((error as { message?: string })?.message !== 'cancel') handleUpdateError(error, '应用更新失败')
+  }
+}
+
 onMounted(() => {
   fetchConfig()
+  void checkUpdate()
+  void pollUpdateStatus()
 })
+
+onBeforeUnmount(stopUpdatePolling)
 
 watch(() => config, () => {
   checkConfigChanged()
@@ -722,6 +848,56 @@ const handleEditSave = (value: string) => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.update-item {
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+}
+
+.update-message {
+  margin: 0.25rem 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.update-failed { color: #e74c3c; }
+.update-completed { color: #2e9d62; }
+
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.progress-track {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--border-color);
+}
+
+.progress-bar {
+  height: 100%;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--primary);
+  animation: progress-slide 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(285%); }
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .about-label {
