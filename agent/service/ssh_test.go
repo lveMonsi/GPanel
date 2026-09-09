@@ -37,6 +37,16 @@ func TestParseSSHLogDate(t *testing.T) {
 			line: "node journal: 2026-08-24T11:22:33+08:00 sshd: Accepted password for user from 192.0.2.1 port 22 ssh2",
 			want: "2026-08-24 11:22:33",
 		},
+		{
+			name: "journal short iso compact offset",
+			line: "2026-08-24T11:22:33.123456+0800 host sshd[123]: Accepted password for user from 192.0.2.1 port 22 ssh2",
+			want: "2026-08-24 11:22:33",
+		},
+		{
+			name: "journal short iso compact negative offset",
+			line: "2026-08-24T11:22:33-0700 host sshd[123]: Failed password for user from 192.0.2.1 port 22 ssh2",
+			want: "2026-08-24 11:22:33",
+		},
 	}
 
 	for _, tt := range tests {

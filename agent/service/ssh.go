@@ -588,18 +588,16 @@ func parseSSHLogDate(line string, now time.Time) string {
 		value := match[1]
 		layouts := []string{
 			time.RFC3339Nano,
+			"2006-01-02T15:04:05.999999999-0700",
+			"2006-01-02T15:04:05-0700",
 			"2006-01-02T15:04:05",
+			"2006-01-02 15:04:05.999999999-0700",
+			"2006-01-02 15:04:05-0700",
 			"2006-01-02 15:04:05.999999999",
 			"2006-01-02 15:04:05",
 		}
 		for _, layout := range layouts {
-			var parsed time.Time
-			var err error
-			if strings.Contains(layout, "Z07") {
-				parsed, err = time.Parse(layout, value)
-			} else {
-				parsed, err = time.ParseInLocation(layout, value, now.Location())
-			}
+			parsed, err := time.ParseInLocation(layout, value, now.Location())
 			if err == nil {
 				return parsed.Format("2006-01-02 15:04:05")
 			}
@@ -635,16 +633,28 @@ func (s *SSHService) GetSSHLogs(page, pageSize int, status, info string) (dto.SS
 		}
 	}
 
-	if len(lines) == 0 {
-		out, err := exec.Command("journalctl", "-u", sshServiceUnit(), "--no-pager", "-n", "10000").Output()
-		if err == nil {
-			lines = strings.Split(string(out), "\n")
-		}
-	}
-
 	acceptedRe := regexp.MustCompile(`Accepted (password|publickey|keyboard-interactive) for (\S+) from (\S+) port (\d+)`)
 	failedRe := regexp.MustCompile(`Failed (password|publickey|keyboard-interactive) for (?:invalid user )?(\S+) from (\S+) port (\d+)`)
 	invalidRe := regexp.MustCompile(`Invalid user (\S+) from (\S+) port (\d+)`)
+	containsSSHLogEntry := func(source []string) bool {
+		for _, line := range source {
+			if acceptedRe.MatchString(line) || failedRe.MatchString(line) || invalidRe.MatchString(line) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// A readable but empty or unrelated auth log must not prevent falling back
+	// to journald, which is the primary source on systemd-based distributions.
+	if !containsSSHLogEntry(lines) {
+		if out, err := exec.Command("journalctl", "-u", sshServiceUnit(), "--no-pager", "-n", "10000").Output(); err == nil {
+			journalLines := strings.Split(string(out), "\n")
+			if containsSSHLogEntry(journalLines) {
+				lines = journalLines
+			}
+		}
+	}
 
 	var items []dto.SSHLogItem
 	for _, line := range lines {
