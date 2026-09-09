@@ -258,7 +258,7 @@
                     <button class="btn btn-secondary" :disabled="updateChannelLocked || latestLoading" @click="checkUpdate">
                       {{ latestLoading ? '检查中...' : '检查更新' }}
                     </button>
-                    <button v-if="updateStatus.phase === 'idle' || updateStatus.phase === 'failed'" class="btn btn-primary" :disabled="updateBusy || latestLoading || !latestRelease" @click="startOnlineUpdate">
+                    <button v-if="canStage" class="btn btn-primary" :disabled="updateBusy || latestLoading" @click="startOnlineUpdate">
                       {{ updateInfo.channel === 'prerelease' ? '更新到最新预发布版' : '更新到最新正式版' }}
                     </button>
                     <button v-if="updateStatus.phase === 'staged'" class="btn btn-primary" :disabled="updateBusy" @click="applyOnlineUpdate">
@@ -287,6 +287,7 @@ import { Edit, Loading } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { getBuildInfo, getLatestVersion, getUpdateStatus, applyUpdate, stageUpdate } from '@/api/modules/update'
 import type { BuildInfo, CurrentReleaseChannel, LatestRelease, ReleaseChannel, UpdatePhase, UpdateStatus } from '@/api/interface/update'
+import { canStageUpdate } from '@/utils/updateAvailability'
 
 interface Config {
   panelUser: string
@@ -360,6 +361,7 @@ const selectedChannelLabel = computed(() => releaseChannelLabel(updateInfo.chann
 const currentChannel = ref<CurrentReleaseChannel>('unknown')
 const currentChannelLabel = computed(() => currentChannel.value === 'unknown' ? '渠道未知' : releaseChannelLabel(currentChannel.value))
 const versionIsCurrent = computed(() => Boolean(buildInfo.version && latestRelease.value && buildInfo.version === latestRelease.value.version))
+const canStage = computed(() => canStageUpdate(updateStatus.phase, buildInfo.version, latestRelease.value))
 const versionComparisonMessage = computed(() => {
   if (latestLoading.value || latestError.value || !latestRelease.value) return ''
   return versionIsCurrent.value ? '当前已是该渠道最新版本' : `可更新到 ${latestRelease.value.version}`
